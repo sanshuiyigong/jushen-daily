@@ -46,6 +46,8 @@ jobs:
           mkdir -p public
           cp -r web public/web
           cp -r output public/output
+          # 根目录也放一份入口，这样 .../jushen-daily/ 直接就能打开，不用带 /web/
+          cp web/index.html public/index.html
           echo "--- 站点内容 ---"
           find public -type f | head -32
 

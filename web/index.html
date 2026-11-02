@@ -127,7 +127,8 @@
 
 <script>
 const STORE = 'jushen:v1';
-const DATA_URL = '../output/recent7.json';   // 相对 web/ 目录
+// 页面既可能挂在 /web/ 下，也可能被复制到站点根目录，所以按顺序试几个路径
+const DATA_PATHS = ['../output/recent7.json', 'output/recent7.json', './output/recent7.json'];
 const INTERVAL = [1, 3, 7];                   // 不会1天 模糊3天 会7天
 const LET = ['A','B','C','D','E','F'];        // 选项标号
 
@@ -153,9 +154,7 @@ function saveState(){ localStorage.setItem(STORE, JSON.stringify(state)); }
 /* ---------------- 数据 ---------------- */
 async function boot(){
   try{
-    const res = await fetch(DATA_URL, { cache:'no-store' });
-    if(!res.ok) throw new Error('HTTP ' + res.status);
-    DATA = await res.json();
+    DATA = await loadData();
   }catch(e){
     document.getElementById('dateline').textContent = '数据加载失败：' + e.message;
     document.getElementById('frontier').innerHTML =
@@ -163,6 +162,18 @@ async function boot(){
     return;
   }
   render();
+}
+
+async function loadData(){
+  let lastErr = null;
+  for(const p of DATA_PATHS){
+    try{
+      const res = await fetch(p, { cache:'no-store' });
+      if(res.ok) return await res.json();
+      lastErr = new Error(p + ' -> HTTP ' + res.status);
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('找不到数据文件');
 }
 
 function today(){ return ymd(); }
