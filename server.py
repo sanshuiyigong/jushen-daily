@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT))
 from engine.assistant import apply as apply_patch_call  # noqa: E402
 from engine.assistant import ask as ask_call  # noqa: E402
 from engine.config import load_config  # noqa: E402
-from engine.dryrun import compare, render as render_dryrun  # noqa: E402
+from engine.dryrun import compare, pool, render as render_dryrun  # noqa: E402
 from engine.llm import LLMClient  # noqa: E402
 from engine.store import SeenStore  # noqa: E402
 
@@ -103,6 +103,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._handle_dryrun()
             elif route == "/api/status":
                 self._handle_status()
+            elif route == "/api/pool":
+                self._handle_pool()
             else:
                 self._send_json({"ok": False, "error": f"未知接口：{route}"}, 404)
         except Exception as exc:  # noqa: BLE001
@@ -131,6 +133,36 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             str(data.get("reason") or ""),
         )
         self._send_json(result)
+
+    def _handle_pool(self) -> None:
+        """返回排好序的候选池，给控制台画色块墙。"""
+        data = self._read_json()
+        cfg = load_config()
+        store = SeenStore(ROOT / "data" / "seen.db")
+        items = store.load_items(days=data.get("days") and int(data["days"]) or None)
+        if not items:
+            self._send_json({"ok": False, "error": "库里没有数据，先跑一次生成"})
+            return
+        top = int(data.get("top") or 40)
+        rows = pool(items, cfg, top=top)
+
+        # 顺便告诉前端今天实际选中的是哪一条（按现状，取手机阈值以上第一条）
+        ranking = cfg.get("ranking") or {}
+        th_mobile = float(ranking.get("mobile_threshold", 7.0))
+        picked = next((r for r in rows if r["score"] >= th_mobile), None)
+
+        self._send_json(
+            {
+                "ok": True,
+                "thresholds": {
+                    "mobile": th_mobile,
+                    "pc": float(ranking.get("pc_threshold", 5.0)),
+                },
+                "total": len(items),
+                "picked_key": (picked or {}).get("key", ""),
+                "items": rows,
+            }
+        )
 
     def _handle_dryrun(self) -> None:
         data = self._read_json()

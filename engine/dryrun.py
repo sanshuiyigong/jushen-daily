@@ -37,6 +37,28 @@ def _key_of(item: Item) -> str:
     return item.key
 
 
+def pool(items: list[Item], cfg: dict[str, Any], *, top: int = 40) -> list[dict[str, Any]]:
+    """用当前配置重算，返回排好序的候选池（给控制台画色块用）。"""
+    rescored = score_items(items, cfg)
+    out: list[dict[str, Any]] = []
+    for i, it in enumerate(rescored[:top], 1):
+        track = str(it.score_parts.get("track", "general"))
+        out.append(
+            {
+                "rank": i,
+                "score": round(float(it.score or 0.0), 2),
+                "title": it.title,
+                "url": it.url,
+                "source": it.source,
+                "track": track,
+                "track_label": TRACK_LABEL.get(track, track),
+                "matched": list(it.score_parts.get("matched") or [])[:5],
+                "key": it.key,
+            }
+        )
+    return out
+
+
 def compare(
     items: list[Item],
     cfg: dict[str, Any],
