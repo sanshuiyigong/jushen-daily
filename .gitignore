@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -22,3 +22,6 @@ config.local.yaml
 .vscode/
 .idea/
 .DS_Store
+
+# 改配置时自动留的备份，不进仓库
+data/patches/

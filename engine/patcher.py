@@ -102,7 +102,13 @@ def apply_patch(root: Path, file: str, old: str, new: str, reason: str = "") -> 
     path.write_text(updated, encoding="utf-8")
 
     commit_msg = "chore: 调整配置" + (f"（{reason}）" if reason else "")
-    committed = git_commit(root, commit_msg)
+    # 只提交这一个文件。绝不能 git add . ——
+    # 否则你手上任何未提交的工作都会被卷进这次提交，历史就脏了。
+    try:
+        rel = str(path.relative_to(Path(root).resolve())).replace("\\", "/")
+    except ValueError:
+        rel = str(file).replace("\\", "/")
+    committed = git_commit(root, commit_msg, paths=[rel])
 
     return {
         "file": str(file).replace("\\", "/"),
@@ -113,21 +119,29 @@ def apply_patch(root: Path, file: str, old: str, new: str, reason: str = "") -> 
 
 
 def git_commit(root: Path, message: str, paths: list[str] | None = None) -> bool:
-    """提交改动。失败不算致命错误，只是没有自动回滚点。"""
+    """只提交指定文件。paths 为 None 时退化为只提交已跟踪的修改，不碰未跟踪文件。"""
     try:
-        add_targets = paths or ["."]
-        subprocess.run(
-            ["git", "add", "--", *add_targets],
-            cwd=str(root), check=True, capture_output=True, timeout=30,
-        )
+        if paths:
+            subprocess.run(
+                ["git", "add", "--", *paths],
+                cwd=str(root), check=True, capture_output=True, timeout=30,
+            )
+        else:
+            subprocess.run(
+                ["git", "add", "-u"],
+                cwd=str(root), check=True, capture_output=True, timeout=30,
+            )
         status = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=str(root), capture_output=True, text=True, timeout=30,
         )
         if not status.stdout.strip():
             return False
+        commit_cmd = ["git", "commit", "-q", "-m", message]
+        if paths:
+            commit_cmd += ["--", *paths]
         subprocess.run(
-            ["git", "commit", "-q", "-m", message],
+            commit_cmd,
             cwd=str(root), check=True, capture_output=True, timeout=30,
         )
         return True
