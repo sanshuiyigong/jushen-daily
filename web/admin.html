@@ -72,8 +72,10 @@
   .box .sc{font-size:19px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
   .box .rk{font-size:11px;color:var(--dim);margin-right:6px;font-weight:400}
   .box .tr{font-size:11px;padding:2px 7px;border-radius:5px;background:var(--panel2);color:var(--dim)}
-  .box .ttl{font-size:13.5px;line-height:1.5;margin-bottom:8px;
+  .box .ttl{font-size:14px;line-height:1.5;margin-bottom:6px;font-weight:600;
     display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .box .en{font-size:11px;line-height:1.45;color:#5f6a7d;margin-bottom:8px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .box .meta{font-size:11.5px;color:var(--dim);display:flex;justify-content:space-between;gap:8px}
   .box .kw{color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .box .pick{position:absolute;right:10px;top:10px;font-size:10.5px;font-weight:700;
@@ -266,9 +268,10 @@ async function loadPool(){
           <span class="sc"><span class="rk">#${it.rank}</span>${it.score.toFixed(2)}</span>
           <span class="tr">${esc(TRACK[it.track] || it.track)}</span>
         </div>
-        <div class="ttl" title="${esc(it.title)}">${esc(it.title)}</div>
+        <div class="ttl">${esc(it.title_zh || it.title)}</div>
+        ${it.title_zh ? `<div class="en" title="${esc(it.title)}">${esc(it.title)}</div>` : ''}
         <div class="meta">
-          <span class="kw">${esc((it.matched||[]).join(' · ') || it.source)}</span>
+          <span class="kw">${esc(it.source_label || it.source)}</span>
         </div>
       </div>`;
     }).join('');
@@ -289,8 +292,9 @@ function renderToday(poolRes){
   box.innerHTML = `
     <div class="tk red">
       <div class="lab">前沿 · ${esc(TRACK[picked.track] || picked.track)} · ${picked.score.toFixed(2)}</div>
-      <div class="ttl">${esc(picked.title)}</div>
-      <div class="sub">${esc(picked.source)} · ${esc((picked.matched||[]).join(' · '))}</div>
+      <div class="ttl">${esc(picked.title_zh || picked.title)}</div>
+      ${picked.title_zh ? `<div class="sub" style="color:#5f6a7d;font-size:11.5px">${esc(picked.title)}</div>` : ''}
+      <div class="sub" style="margin-top:6px">${esc(picked.source_label || picked.source)}${picked.matched && picked.matched.length ? ' · ' + esc(picked.matched.join(' · ')) : ''}</div>
     </div>
     <div class="tk blue">
       <div class="lab">概念卡</div>

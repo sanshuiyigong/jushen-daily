@@ -27,6 +27,14 @@ from .store import SeenStore
 
 TRACK_LABEL = {"perception": "感知", "control": "控制", "general": "通用"}
 
+SOURCE_LABEL = {
+    "arxiv_ro": "arXiv 机器人",
+    "arxiv_cv": "arXiv 视觉",
+    "hf_papers": "HF 精选",
+    "github": "GitHub",
+    "hn": "Hacker News",
+}
+
 
 def _short(text: str, n: int = 62) -> str:
     text = " ".join(str(text or "").split())
@@ -50,6 +58,8 @@ def pool(items: list[Item], cfg: dict[str, Any], *, top: int = 40) -> list[dict[
                 "title": it.title,
                 "url": it.url,
                 "source": it.source,
+                "source_label": SOURCE_LABEL.get(it.source, it.source),
+                "summary": (it.summary or "")[:300],
                 "track": track,
                 "track_label": TRACK_LABEL.get(track, track),
                 "matched": list(it.score_parts.get("matched") or [])[:5],

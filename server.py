@@ -146,6 +146,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         top = int(data.get("top") or 40)
         rows = pool(items, cfg, top=top)
 
+        # 英文标题翻成中文。有缓存，同一条只翻一次；
+        # 没 key 或翻译失败时 title_zh 为空，前端自动退回英文标题。
+        gloss: dict[str, str] = {}
+        try:
+            from engine.gloss import translate
+
+            gloss = translate(rows, LLMClient(cfg), ROOT / "data", limit=top)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("标题翻译不可用：%s", exc)
+        for r in rows:
+            r["title_zh"] = gloss.get(r["key"], "")
+
         # 顺便告诉前端今天实际选中的是哪一条（按现状，取手机阈值以上第一条）
         ranking = cfg.get("ranking") or {}
         th_mobile = float(ranking.get("mobile_threshold", 7.0))
