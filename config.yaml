@@ -143,7 +143,7 @@ ranking:
     grasp: 0.8
     teleop: 0.8
     policy: 0.7
-    slam: 0.7
+    slam: 0.4
     isaac: 0.7
     mujoco: 0.7
     "point cloud": 0.7
