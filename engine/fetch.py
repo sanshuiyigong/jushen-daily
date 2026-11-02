@@ -19,8 +19,16 @@ from xml.etree import ElementTree as ET
 
 from .config import load_config
 from .models import Item, arxiv_id_from, make_key, parse_iso_loose
+from .net import make_session
 
 LOG = logging.getLogger("fetch")
+
+# 按源分别选路：
+#   hf-mirror 是国内镜像，直连最快，绕道国外反而慢
+#   arXiv / GitHub / HN 都在国外，实测 arXiv 直连 18.9 秒、走代理 2.9 秒
+# 云端（GitHub Actions）探测不到本地代理，两个会话都退化成直连，行为一致。
+_SESSION_DIRECT = make_session(proxy="")
+_SESSION_AUTO = make_session()
 
 UA = {
     "User-Agent": "jushen-daily/0.1 (personal research digest)",
@@ -42,6 +50,7 @@ def _get(
     timeout: int = 30,
     retries: int = 2,
     backoff: float = 2.0,
+    session: requests.Session | None = None,
 ) -> requests.Response:
     merged = dict(UA)
     if headers:
@@ -49,7 +58,7 @@ def _get(
     last: Exception | None = None
     for attempt in range(retries + 1):
         try:
-            resp = requests.get(url, params=params, headers=merged, timeout=timeout)
+            resp = (session or _SESSION_AUTO).get(url, params=params, headers=merged, timeout=timeout)
             # 401/403 是限流或鉴权问题，重试只会更糟，直接放弃
             if resp.status_code in (401, 403):
                 raise RuntimeError(f"HTTP {resp.status_code}（限流/鉴权，不重试）")
@@ -71,7 +80,7 @@ def _get(
 # ---------------------------------------------------------------- arXiv
 def fetch_arxiv(category: str, max_results: int = 40, name: str = "arxiv_ro") -> list[Item]:
     resp = _get(
-        "http://export.arxiv.org/api/query",
+        "https://export.arxiv.org/api/query",
         params={
             "search_query": f"cat:{category}",
             "sortBy": "submittedDate",
@@ -114,7 +123,20 @@ def fetch_arxiv(category: str, max_results: int = 40, name: str = "arxiv_ro") ->
 
 # ------------------------------------------------------------- HF Papers
 def fetch_hf_papers(base_url: str, limit: int = 30) -> list[Item]:
-    resp = _get(f"{base_url.rstrip('/')}/api/daily_papers", params={"limit": int(limit)})
+    try:
+        resp = _get(
+            f"{base_url.rstrip('/')}/api/daily_papers",
+            params={"limit": int(limit)},
+            session=_SESSION_DIRECT,   # 国内镜像，直连最快
+        )
+    except Exception as exc:  # noqa: BLE001
+        # 直连偶尔会被重置（实测过瞬时抖动）。退一步走代理，总比整源丢掉好。
+        LOG.warning("hf 直连失败（%s），改走代理重试", exc)
+        resp = _get(
+            f"{base_url.rstrip('/')}/api/daily_papers",
+            params={"limit": int(limit)},
+            session=_SESSION_AUTO,
+        )
     data = resp.json()
     if not isinstance(data, list):
         LOG.warning("HF 返回不是列表，跳过")

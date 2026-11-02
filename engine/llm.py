@@ -18,6 +18,8 @@ from typing import Any
 
 import requests
 
+from .net import make_session
+
 LOG = logging.getLogger("llm")
 
 ENV_KEY = "JUSHEN_LLM_KEY"
@@ -104,6 +106,9 @@ class LLMClient:
         self.model = str(conf.get("model") or "deepseek-chat")
         self.timeout = int(conf.get("timeout") or 90)
         self._calls = 0
+        # DeepSeek 是国内服务，直连最快。强制不走代理，
+        # 避免 requests 从注册表读到带 https:// 协议头的错误代理配置。
+        self.session = make_session(proxy="")
 
     @property
     def available(self) -> bool:
@@ -134,7 +139,7 @@ class LLMClient:
             payload["response_format"] = {"type": "json_object"}
         try:
             self._calls += 1
-            resp = requests.post(
+            resp = self.session.post(
                 f"{self.base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",

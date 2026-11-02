@@ -12,43 +12,17 @@ from __future__ import annotations
 import json
 import logging
 import os
-import socket
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import requests
 
+from .net import detect_local_proxy, make_session
+
 LOG = logging.getLogger("push")
 
 STATE_FILE = "push_state.json"
-
-# 常见的本地代理端口，按优先级探测
-_LOCAL_PROXY_PORTS = (7897, 7890, 7891, 10809, 10808, 1080)
-
-
-def _detect_local_proxy() -> str:
-    """探测本机是否有正在监听的代理端口，有就返回它的 URL。
-
-    为什么需要这个：Python 的 requests 不读 Windows 系统代理设置，
-    只读 HTTP_PROXY / HTTPS_PROXY 环境变量。所以从这台机器直连 ntfy.sh
-    会走裸连接——实测要 14 秒，TLS 握手经常撑不住直接断掉。
-    走本地代理只要 1.8 秒。
-
-    GitHub Actions 的 runner 上没有这些端口，探测会失败并自动退回直连，
-    所以同一个函数在云端是安全的空操作。
-    """
-    for port in _LOCAL_PROXY_PORTS:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.35)
-        try:
-            if sock.connect_ex(("127.0.0.1", port)) == 0:
-                return f"http://127.0.0.1:{port}"
-        except OSError:
-            pass
-        finally:
-            sock.close()
-    return ""
 
 
 def default_page_url() -> str:
@@ -107,7 +81,7 @@ def send_ntfy(
     priority: int = 3,
     tags: list[str] | None = None,
     timeout: int = 25,
-    proxies: dict[str, str] | None = None,
+    session: requests.Session | None = None,
 ) -> bool:
     payload: dict[str, Any] = {
         "topic": topic,
@@ -122,12 +96,11 @@ def send_ntfy(
 
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     try:
-        resp = requests.post(
+        resp = (session or make_session()).post(
             server.rstrip("/") + "/",
             data=body,
             headers={"Content-Type": "application/json; charset=utf-8"},
             timeout=timeout,
-            proxies=proxies,
         )
     except Exception as exc:  # noqa: BLE001
         LOG.warning("推送请求失败：%s", exc)
@@ -281,10 +254,12 @@ def push_daily(
         # 代理：显式配置优先，其次自动探测本地代理（云端不会命中，自动直连）
         proxy_url = str(push_cfg.get("proxy") or "").strip()
         if not proxy_url and bool(push_cfg.get("auto_proxy", True)):
-            proxy_url = _detect_local_proxy()
-        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+            proxy_url = detect_local_proxy()
+        session = make_session(proxy=proxy_url)   # "" = 强制直连
         if proxy_url:
             LOG.info("推送将走代理 %s", proxy_url)
+        else:
+            LOG.info("推送直连（未探测到本地代理）")
 
         ok = send_ntfy(
             server,
@@ -294,7 +269,7 @@ def push_daily(
             click=click,
             priority=int(push_cfg.get("priority") or 3),
             tags=["robot"],
-            proxies=proxies,
+            session=session,
         )
     else:
         LOG.warning("不认识的推送渠道：%s", channel)

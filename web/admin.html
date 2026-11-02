@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>具身日报 · 控制台</title>
+<style>
+  :root{
+    --bg:#0d1015; --panel:#161a21; --panel2:#1d222b; --line:#2a303b;
+    --fg:#e6e9ef; --dim:#8b93a3; --accent:#7dd3fc; --ok:#4ade80;
+    --warn:#fbbf24; --bad:#f87171; --add:#14532d; --del:#7f1d1d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+    font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  body{padding:0 0 90px}
+
+  header{position:sticky;top:0;z-index:10;background:rgba(13,16,21,.94);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:14px 22px}
+  .hrow{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  h1{margin:0;font-size:16px;font-weight:600;letter-spacing:.3px}
+  .pill{font-size:12px;color:var(--dim);background:var(--panel2);
+    border:1px solid var(--line);border-radius:20px;padding:3px 11px}
+  .pill b{color:var(--fg);font-weight:600}
+  .pill.on b{color:var(--ok)}
+  .pill.off b{color:var(--bad)}
+
+  main{max-width:1080px;margin:0 auto;padding:22px}
+
+  .bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+  button{font-family:inherit;font-size:13.5px;cursor:pointer;border-radius:10px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--fg);padding:10px 16px;
+    transition:.14s}
+  button:hover{border-color:#3d4757}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:var(--accent);color:#08131a;border-color:var(--accent);font-weight:600}
+  button.good{background:#166534;border-color:#166534;color:#dcfce7;font-weight:600}
+  button.ghost{background:transparent}
+
+  h2{font-size:12px;letter-spacing:.7px;text-transform:uppercase;color:var(--dim);
+    margin:26px 0 10px;font-weight:600}
+
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:16px;overflow:auto;font:12.5px/1.65 "Cascadia Code","Consolas",monospace;
+    color:#c3cad6;margin:0;white-space:pre}
+
+  .empty{background:var(--panel);border:1px dashed var(--line);border-radius:12px;
+    padding:22px;text-align:center;color:var(--dim);font-size:13px}
+
+  /* 补丁卡 */
+  .patch{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;margin-bottom:12px}
+  .patch.bad{border-color:#7f1d1d}
+  .phead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+  .pfile{font:12px/1 ui-monospace,monospace;color:var(--accent);
+    background:var(--panel2);padding:4px 9px;border-radius:6px}
+  .pwhy{color:var(--dim);font-size:12.5px}
+  .diff{font:12px/1.6 ui-monospace,monospace;border-radius:8px;overflow:hidden;
+    border:1px solid var(--line)}
+  .diff div{padding:5px 11px;white-space:pre-wrap;word-break:break-all}
+  .diff .del{background:rgba(248,113,113,.1);color:#fca5a5}
+  .diff .add{background:rgba(74,222,128,.1);color:#86efac}
+  .perr{color:#fca5a5;font-size:12.5px;margin-top:8px}
+  .pacts{display:flex;gap:8px;margin-top:11px}
+  .pacts button{padding:7px 14px;font-size:13px}
+
+  /* 聊天抽屉 */
+  #fab{position:fixed;right:24px;bottom:24px;width:54px;height:54px;border-radius:50%;
+    background:var(--accent);color:#08131a;border:none;font-size:22px;cursor:pointer;
+    box-shadow:0 6px 22px rgba(0,0,0,.45);z-index:30}
+  #drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--panel);
+    border-left:1px solid var(--line);display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform .22s ease;z-index:40}
+  #drawer.on{transform:translateX(0)}
+  .dhead{display:flex;justify-content:space-between;align-items:center;
+    padding:15px 18px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .dhead b{font-size:14px}
+  .dhead button{background:none;border:none;color:var(--dim);font-size:18px;padding:4px 8px}
+  #log{flex:1 1 auto;overflow-y:auto;padding:16px}
+  .msg{margin-bottom:14px;font-size:13.5px;line-height:1.65}
+  .msg .who{font-size:11px;color:var(--dim);margin-bottom:4px;letter-spacing:.5px}
+  .msg.user .bubble{background:var(--accent);color:#08131a;border-radius:12px 12px 3px 12px;
+    padding:9px 13px;display:inline-block;max-width:100%}
+  .msg.ai .bubble{background:var(--panel2);border:1px solid var(--line);border-radius:12px 12px 12px 3px;
+    padding:10px 13px;white-space:pre-wrap}
+  .hint{color:var(--dim);font-size:12.5px;line-height:1.8}
+  .hint code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:12px}
+  .dinput{flex:0 0 auto;border-top:1px solid var(--line);padding:12px;display:flex;gap:8px}
+  .dinput textarea{flex:1;resize:none;height:58px;background:var(--panel2);color:var(--fg);
+    border:1px solid var(--line);border-radius:10px;padding:10px;font:13.5px/1.5 inherit}
+  .dinput textarea:focus{outline:none;border-color:var(--accent)}
+
+  #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
+    background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:11px 20px;font-size:13.5px;opacity:0;transition:.2s;z-index:60;pointer-events:none}
+  #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.bad{border-color:#7f1d1d;color:#fca5a5}
+  .spin{display:inline-block;width:11px;height:11px;border:2px solid var(--dim);
+    border-top-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <h1>具身日报 · 控制台</h1>
+    <span class="pill" id="p-db">库 –</span>
+    <span class="pill" id="p-day">最近 –</span>
+    <span class="pill" id="p-git">git –</span>
+    <span class="pill" id="p-llm">LLM –</span>
+  </div>
+</header>
+
+<main>
+  <div class="bar">
+    <button class="primary" id="btnStatus">刷新状态</button>
+    <button id="btnDryrun">试跑对比</button>
+    <button class="ghost" id="btnDryrunTight">试：阈值 8.0</button>
+  </div>
+
+  <h2>试跑结果</h2>
+  <div id="dryrunBox"><div class="empty">点「试跑对比」看当前配置会推什么<br>
+    <span style="font-size:12px">（用库里已有的历史数据重算，不联网、不花钱）</span></div></div>
+
+  <h2>补丁</h2>
+  <div id="patches"><div class="empty">右下角 ⚙ 打开对话，让它帮你改配置</div></div>
+</main>
+
+<button id="fab" title="聊天调参">⚙</button>
+
+<div id="drawer">
+  <div class="dhead">
+    <b>调参助手</b>
+    <button id="closeDrawer">✕</button>
+  </div>
+  <div id="log">
+    <div class="hint">
+      用大白话说你想怎么改，比如：<br>
+      · <code>SLAM 推太多了，少推点</code><br>
+      · <code>概念卡太长了，压到 150 字</code><br>
+      · <code>每天推 2 条前沿</code><br>
+      · <code>电控线先学电源那一格</code><br><br>
+      AI 只会<b>提议</b>改动，你点「应用」才会真的写进文件，并且自动 git commit。
+    </div>
+  </div>
+  <div class="dinput">
+    <textarea id="input" placeholder="想怎么改？（Ctrl+Enter 发送）"></textarea>
+    <button class="primary" id="send" style="padding:0 18px">发送</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let HISTORY = [];
+
+function toast(msg, bad=false){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'on' + (bad ? ' bad' : '');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.className = ''; }, 3200);
+}
+
+async function api(path, payload){
+  const res = await fetch(path, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload || {})
+  });
+  return await res.json();
+}
+
+/* ---------------- 状态 ---------------- */
+async function loadStatus(){
+  try{
+    const s = await api('/api/status');
+    $('p-db').innerHTML = `库 <b>${s.db_total}</b> 条`;
+    $('p-day').innerHTML = `最近 <b>${String(s.latest_day_files).replace('day-','').replace('.json','')}</b>`;
+    $('p-git').innerHTML = `git <b>${s.git_branch || '?'}</b>${s.git_dirty ? ' *' : ''}`;
+    $('p-git').title = s.git_last;
+    const llm = $('p-llm');
+    llm.className = 'pill ' + (s.llm_on ? 'on' : 'off');
+    llm.innerHTML = `LLM <b>${s.llm_on ? '开' : '关'}</b>`;
+  }catch(e){ toast('状态读取失败：' + e.message, true); }
+}
+
+/* ---------------- 试跑 ---------------- */
+async function runDryrun(extra){
+  const box = $('dryrunBox');
+  box.innerHTML = '<div class="empty"><span class="spin"></span> 重算中…</div>';
+  try{
+    const r = await api('/api/dryrun', extra || {});
+    if(!r.ok){ box.innerHTML = `<div class="empty">${r.error}</div>`; return; }
+    box.innerHTML = '<pre></pre>';
+    box.querySelector('pre').textContent = r.text;
+  }catch(e){ box.innerHTML = `<div class="empty">失败：${e.message}</div>`; }
+}
+
+/* ---------------- 补丁 ---------------- */
+function renderPatches(patches){
+  const box = $('patches');
+  if(!patches.length){ return; }
+  box.innerHTML = '';
+  patches.forEach((p, i) => {
+    const d = document.createElement('div');
+    d.className = 'patch' + (p.applicable ? '' : ' bad');
+    d.innerHTML = `
+      <div class="phead">
+        <span class="pfile">${esc(p.file)}</span>
+        <span class="pwhy">${esc(p.reason || '')}</span>
+      </div>
+      <div class="diff">
+        ${p.old.split('\n').map(l => `<div class="del">- ${esc(l)}</div>`).join('')}
+        ${p.new.split('\n').map(l => `<div class="add">+ ${esc(l)}</div>`).join('')}
+      </div>
+      ${p.applicable ? '' : `<div class="perr">✘ 不能应用：${esc(p.error)}</div>`}
+      <div class="pacts">
+        ${p.applicable ? `<button class="good" data-i="${i}">应用</button>` : ''}
+        <button class="ghost" data-skip="${i}">跳过</button>
+      </div>`;
+    box.appendChild(d);
+  });
+  box.querySelectorAll('button[data-i]').forEach(btn => {
+    btn.addEventListener('click', () => applyOne(patches[Number(btn.dataset.i)], btn));
+  });
+  box.querySelectorAll('button[data-skip]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.closest('.patch').style.opacity = '.4';
+      btn.disabled = true;
+    });
+  });
+}
+
+async function applyOne(p, btn){
+  btn.disabled = true;
+  btn.textContent = '应用中…';
+  try{
+    const r = await api('/api/apply', {file:p.file, old:p.old, new:p.new, reason:p.reason});
+    if(r.ok){
+      btn.textContent = '已应用 ✓';
+      btn.classList.remove('good');
+      toast('已写入 ' + p.file + (r.committed ? '，并已 git commit' : ''));
+      loadStatus();
+    }else{
+      btn.textContent = '失败';
+      toast('应用失败：' + r.error, true);
+    }
+  }catch(e){ toast('应用出错：' + e.message, true); }
+}
+
+/* ---------------- 聊天 ---------------- */
+function addMsg(who, text){
+  const box = $('log');
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  d.innerHTML = `<div class="who">${who === 'user' ? '你' : 'AI'}</div>
+                 <div class="bubble">${esc(text)}</div>`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+  return d;
+}
+
+async function send(){
+  const input = $('input');
+  const text = input.value.trim();
+  if(!text) return;
+  input.value = '';
+  addMsg('user', text);
+  HISTORY.push({role:'user', content:text});
+
+  const thinking = addMsg('ai', '思考中…');
+  $('send').disabled = true;
+  try{
+    const r = await api('/api/chat', {message:text, history:HISTORY});
+    thinking.remove();
+    if(!r.ok){
+      addMsg('ai', '出错了：' + r.error);
+    }else{
+      addMsg('ai', r.reply || '（没有回复）');
+      HISTORY.push({role:'assistant', content:r.reply || ''});
+      if(r.patches && r.patches.length) renderPatches(r.patches);
+    }
+  }catch(e){
+    thinking.remove();
+    addMsg('ai', '请求失败：' + e.message);
+  }finally{
+    $('send').disabled = false;
+  }
+}
+
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ---------------- 事件 ---------------- */
+$('btnStatus').addEventListener('click', loadStatus);
+$('btnDryrun').addEventListener('click', () => runDryrun({}));
+$('btnDryrunTight').addEventListener('click', () => runDryrun({mobile: 8.0}));
+$('fab').addEventListener('click', () => $('drawer').classList.add('on'));
+$('closeDrawer').addEventListener('click', () => $('drawer').classList.remove('on'));
+$('send').addEventListener('click', send);
+$('input').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send();
+});
+
+loadStatus();
+runDryrun({});
+</script>
+</body>
+</html>

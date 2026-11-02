@@ -1,0 +1,152 @@
+# ============================================================
+# jushen-daily 配置
+# 聊天窗口以后改的就是这个文件（改完会 git commit，可回滚）
+#
+# 注意：这里用 YAML 而不是 TOML，因为 yolov5 环境是 Python 3.8，
+# 标准库没有 tomllib。YAML 还有个好处：不受「标量必须在子表之前」
+# 那个坑影响（TOML 里 core 曾经被静默归到 ranking.weights 下面）。
+# ============================================================
+
+general:
+  timezone: Asia/Shanghai
+  mobile_frontier_max: 1      # 每天推到手机的前沿条数上限
+  quiz_per_day: 2             # 每天生成几道题
+  mobile_retention_days: 7    # 手机端保留最近几天（缓冲池）
+  pc_retention_days: 30       # 电脑端保留最近几天（超过进 archive）
+
+paths:
+  data: data
+  output: output
+  reading: reading
+  web: web
+  curriculum: curriculum
+
+llm:
+  provider: deepseek
+  base_url: https://api.deepseek.com
+  model: deepseek-chat
+  api_key: ""                 # 留空时自动读环境变量 JUSHEN_LLM_KEY
+  timeout: 90
+
+# ---------- 推送（第 ⑩ 步用，现在可以先把手机端订阅好）----------
+push:
+  channel: ntfy               # ntfy | off
+  server: https://ntfy.sh
+  # ⚠️ 主题名等于密码：知道这个名字的人就能给你发消息、也能订阅你的推送。
+  # 所以带随机后缀，别用 jushen-daily 这种一眼能猜到的名字。
+  topic: jushen-7c4f2a91
+  hour: 7                     # 每天几点推
+  minute: 30
+  # 推送里带完整内容（概念卡全文 + 题目 + 答案 + 前沿）
+  # 关掉的话只推标题摘要，必须点链接才能看
+  include_content: true
+  priority: 4                 # 1最低 5最高；4 = 高优先级但不会强行打断免打扰
+  # 推送走不走代理。留空 = 自动探测本地代理端口（7897/7890/1080…）
+  # 云端 runner 上探测不到，会自动退回直连，所以这里不用改
+  proxy: ""
+  auto_proxy: true
+
+# ---------- 数据源 ----------
+# weight: 源权重 0~1，直接影响排序得分
+# enabled: 关掉某个源不用删代码
+
+sources:
+  arxiv_ro:
+    enabled: true
+    label: arXiv cs.RO
+    weight: 1.00
+    category: cs.RO
+    max_results: 40
+
+  arxiv_cv:
+    enabled: true
+    label: arXiv cs.CV
+    weight: 0.75
+    category: cs.CV
+    max_results: 25
+
+  hf_papers:
+    enabled: true
+    label: HF Daily Papers
+    weight: 0.95
+    # 国内直连 huggingface.co 不通，必须走镜像
+    base_url: https://hf-mirror.com
+    limit: 30
+
+  github:
+    enabled: true
+    label: GitHub
+    weight: 0.70
+    # 一个 topic 一次请求；未认证限流很紧，别开太多
+    topics: [embodied-ai, robot-learning, vla, manipulation]
+    # 只看「新创建」的仓库，而不是「老仓库今天有提交」
+    # 后者每天返回同一批巨星仓库，去重后第二天就什么都不剩
+    min_stars: 10
+    days: 21
+    token: ""                 # 填了 token 限流会宽很多
+
+  hn:
+    # 实测：近 3 天 153 条高分帖只有 1 条命中机器人关键词，且是社会新闻。
+    # HN 不是具身智能的信息源，默认关闭。想开回来改 enabled: true
+    enabled: false
+    label: Hacker News
+    weight: 0.40
+    # 不按关键词查（Algolia 的 query 是全文模糊匹配，噪声极大），
+    # 而是拉取近几天所有高分帖，再用白名单过滤标题
+    keywords:
+      [robot, robotics, robotic, embodied, humanoid, manipulation,
+       VLA, "world model", sim2real, drone, quadruped, teleoperation, lerobot]
+    min_points: 40
+    days: 3
+    scan: 300
+
+# ---------- 排序 ----------
+ranking:
+  max_candidates: 15          # 规则分 top N 才送进 LLM 精排
+  mobile_threshold: 7.0       # 手机端只收这个分数以上的
+  pc_threshold: 5.0           # 电脑端队列收这个分数以上的
+
+  # 核心词门禁：只看标题。标题里连一个具身核心词都没有的，
+  # 大概率是纯 LLM / 通用方向（比如 RLHF 论文里的 "policy"），分数打 6 折。
+  core:
+    [robot, robotic, robotics, embodied, manipulation, manipulator,
+     vla, humanoid, grasp, dexterous, sim2real, "world model",
+     imitation, teleoperation, lerobot, quadruped, end-effector,
+     gripper, locomotion, "mobile manipulation", slam, "visual servoing"]
+
+  # 四项加权，和必须为 1
+  weights:
+    source: 0.35
+    keyword: 0.35
+    heat: 0.15
+    recency: 0.15
+
+  # 热度归一化的上限（各源量级差异太大，必须分开算）
+  heat_cap:
+    hf_papers: 80.0
+    github: 1500.0
+    hn: 400.0
+
+  # 权重系数：标题+摘要命中则累加，最后归一化到 0~1
+  keywords:
+    vla: 1.0
+    embodied: 1.0
+    manipulation: 0.9
+    dexterous: 0.9
+    sim2real: 0.9
+    lerobot: 0.9
+    calibration: 0.9
+    "hand-eye": 1.0
+    "world model": 0.9
+    "6d pose": 0.9
+    imitation: 0.8
+    grasp: 0.8
+    teleop: 0.8
+    policy: 0.7
+    slam: 0.7
+    isaac: 0.7
+    mujoco: 0.7
+    "point cloud": 0.7
+    vio: 0.6
+    foc: 0.6
+    ros: 0.5
