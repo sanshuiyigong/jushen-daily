@@ -2,8 +2,13 @@
 chcp 65001 >nul
 setlocal
 set PYTHONIOENCODING=utf-8
-set PYTHONPATH=%~dp0
 
+rem 项目根目录：写死绝对路径，这样这个 bat 被复制到任何地方都能用；
+rem 如果哪天项目搬走了，下面的 if not exist 会退回「bat 自己所在目录」。
+set "PROJ=D:\2026一次深刻而迫切的转变\jushen-daily"
+if not exist "%PROJ%\run.py" set "PROJ=%~dp0"
+
+set PYTHONPATH=%PROJ%
 set PY=C:\ProgramData\anaconda3\envs\yolov5\python.exe
 
 if not exist "%PY%" (
@@ -12,10 +17,18 @@ if not exist "%PY%" (
   pause
   exit /b 1
 )
+if not exist "%PROJ%\run.py" (
+  echo [ERROR] run.py not found in %PROJ%
+  echo The project folder may have been moved.
+  pause
+  exit /b 1
+)
+
+cd /d "%PROJ%"
 
 echo.
 echo [1/2] Syncing state from cloud...
-git -C "%~dp0" pull --ff-only --quiet 1>nul 2>nul
+git -C "%PROJ%" pull --ff-only --quiet 1>nul 2>nul
 if errorlevel 1 (
   echo       skipped - no network, or the proxy is not running
   echo       ^(local dedupe may be stale; the cloud copy is still correct^)
@@ -25,7 +38,7 @@ if errorlevel 1 (
 
 echo [2/2] Generating today's digest...
 echo.
-"%PY%" "%~dp0run.py" --open %*
+"%PY%" "%PROJ%\run.py" --open %*
 set CODE=%ERRORLEVEL%
 
 echo.
