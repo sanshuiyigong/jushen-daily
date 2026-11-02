@@ -37,6 +37,9 @@ MAX_TRIES = 10
 
 LOG = logging.getLogger("server")
 
+# 运行期信息（端口等），供 /api/status 读取
+_RUNTIME: dict[str, object] = {}
+
 
 def lan_ip() -> str:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -213,6 +216,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except Exception:  # noqa: BLE001
                 return ""
 
+        port = _RUNTIME.get("port") or START_PORT
+        ip = lan_ip()
+        lan_url = f"http://{ip}:{port}/web/index.html"
+
         self._send_json(
             {
                 "ok": True,
@@ -220,6 +227,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "db_pushed": stats["pushed"],
                 "latest_day_files": latest,
                 "llm_on": bool(LLMClient(cfg).available),
+                "lan_url": lan_url,
+                "lan_ip": ip,
+                "port": port,
                 "git_branch": git("rev-parse", "--abbrev-ref", "HEAD"),
                 "git_dirty": bool(git("status", "--porcelain")),
                 "git_last": git("log", "-1", "--pretty=%h %s"),
@@ -249,6 +259,7 @@ def serve() -> int:
         print(f"[ERROR] {START_PORT}-{START_PORT + MAX_TRIES - 1} 端口全被占用")
         return 1
 
+    _RUNTIME["port"] = port
     ip = lan_ip()
     print()
     print("=" * 66)

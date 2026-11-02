@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>具身日报 · 控制台</title>
+<link rel="icon" href="favicon.ico">
 <style>
   :root{
     --bg:#0b0e13; --panel:#14181f; --panel2:#1b2029; --line:#262c37;
@@ -29,6 +30,9 @@
   .pill b{color:var(--fg);font-weight:600}
   .pill.on b{color:var(--ok)}
   .pill.off b{color:var(--t-red)}
+  a.pill{text-decoration:none;color:var(--accent);border-color:rgba(125,211,252,.35);
+    background:rgba(125,211,252,.08)}
+  a.pill:hover{border-color:var(--accent);background:rgba(125,211,252,.16)}
 
   main{max-width:1280px;margin:0 auto;padding:22px 24px}
 
@@ -165,6 +169,8 @@
     <span class="pill" id="p-day">最近 –</span>
     <span class="pill" id="p-git">git –</span>
     <span class="pill" id="p-llm">LLM –</span>
+    <a class="pill" id="p-lan" href="#" target="_blank" style="display:none"
+       title="手机连同一个 WiFi，浏览器打开这个地址">手机访问 –</a>
     <span style="flex:1"></span>
     <button id="btnReload">刷新</button>
   </div>
@@ -341,6 +347,12 @@ async function loadStatus(){
     $('p-git').title = s.git_last || '';
     $('p-llm').className = 'pill ' + (s.llm_on ? 'on' : 'off');
     $('p-llm').innerHTML = `LLM <b>${s.llm_on ? '开' : '关'}</b>`;
+    if(s.lan_url){
+      const a = $('p-lan');
+      a.style.display = '';
+      a.textContent = '手机访问 ' + s.lan_ip + ':' + s.port;
+      a.href = s.lan_url;
+    }
   }catch(e){ /* 忽略 */ }
 }
 
