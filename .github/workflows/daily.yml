@@ -1,0 +1,77 @@
+name: 具身日报
+
+on:
+  schedule:
+    # GitHub Actions 的 cron 用 UTC。
+    # 30 23 * * * = 北京时间次日 07:30
+    # 注意：高峰期可能延迟几分钟到半小时，这是 GitHub 的行为，无法避免。
+    - cron: "30 23 * * *"
+  # 允许在网页上手动点「Run workflow」立即跑一次
+  workflow_dispatch:
+
+# 需要写权限来回提交去重库，需要 pages 权限来部署
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# 同一天不要并发跑两份
+concurrency:
+  group: jushen-daily
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 抓取 · 打分 · 生成 · 推送
+        env:
+          # key 存在仓库 Secrets 里，不会出现在任何文件中
+          JUSHEN_LLM_KEY: ${{ secrets.JUSHEN_LLM_KEY }}
+        run: python run.py
+
+      - name: 打包 Pages 站点
+        run: |
+          mkdir -p public
+          cp -r web public/web
+          cp -r output public/output
+          echo "--- 站点内容 ---"
+          find public -type f | head -32
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: 保存去重状态
+        # 没有这一步，每天都会把全部内容当成新的重推一遍
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/seen.db data/progress.json data/push_state.json 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "状态无变化，跳过提交"
+          else
+            git commit -m "chore: 更新学习状态 [skip ci]"
+            git push
+          fi
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 本地状态（这个要提交到仓库，云端靠它维持去重，所以不忽略）
+# data/seen.db
+# data/progress.json
+# data/push_state.json
+
+# 本地产物（云端会重新生成并直接部署，不需要提交）
+output/
+reading/
+
+# 敏感信息
+.env
+*.key
+config.local.yaml
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,166 @@
+# 电控线（具身机器人的执行侧）
+#
+# 这条线不是通用电子课表——刻意砍掉了模拟电路（小信号模型、共射放大器频率响应那一套）。
+# 具身智能不需要那些。它需要的是三件事：
+#   1. 让一个关节稳定闭环
+#   2. 让电源在二十个电机同时启动时不塌
+#   3. 让「感知 → 决策 → 执行」在时间上对得齐
+#
+# 顺序是按「你们公司现在最可能出事故的地方」排的，不是按教材章节。
+# 竞赛级方案（一块驱动板串一堆舵机、没有 MCU、不考虑压降和延迟）
+# 到产品级之间，这道坎几乎所有从 RoboMaster / 工创赛走出来的项目都卡在同一个位置。
+
+track: control
+name: 电控与执行侧
+description: >-
+  从「能接线让它动」到「知道为什么这么接、什么时候会烧、延迟在哪」。
+  每一格都对应一个真机上会要命的具体问题。
+
+nodes:
+  - id: c-basics
+    order: 1
+    title: 电路的基本语言
+    goal: 能看懂一块驱动板的供电和信号，并估算它要吃多少电流
+    prereq: []
+    estimated_days: 2
+    keywords: [voltage, current, power, ohm, resistor, buck, ldo, bec]
+    reading:
+      - title: 任意入门电路教材的前三章（只看到「功率」为止，别往下读）
+      - title: 你手上那块驱动板的原理图和数据手册
+    checkpoints:
+      - 能说出 12V / 2A 意味着什么，以及它和 24W 的关系
+      - 能区分 LDO 和 DCDC：效率、发热、什么时候只能用 LDO
+      - 能估算 N 个舵机同时堵转时的总电流
+      - 知道为什么电机电源和逻辑电源要分开
+
+  - id: c-servo-bus
+    order: 2
+    title: 舵机总线协议
+    goal: 读懂你正在用的那套舵机手册，知道它每一帧在说什么
+    prereq: [c-basics]
+    estimated_days: 3
+    # 你们现在用的驱动板本质上就是一个舵机总线集线器。
+    # 不理解协议，就永远只能「能动能跑」，没法做任何时序上的判断。
+    keywords: [servo, bus servo, serial, uart, protocol, sts, scs, position command]
+    reading:
+      - title: 你所用的舵机型号的通信协议手册（Feetech STS / 幻尔 LX / 雷霆 等）
+      - title: 该系列舵机的寄存器表（位置、速度、负载、温度、电压）
+    checkpoints:
+      - 能手算一帧指令的字节数和耗时
+      - 知道广播模式和单播模式的区别
+      - 能读出当前负载和温度，并判断是否接近堵转
+      - 能算出「20 个舵机轮询一轮」最少要多少毫秒
+
+  - id: c-power
+    order: 3
+    title: 电源、压降与保护
+    goal: 让机器人在所有电机同时动作时不复位、不失控、不烧板
+    prereq: [c-basics, c-servo-bus]
+    estimated_days: 7
+    # ⚠️ 这一格优先级很高，因为它是「会出事故」的那一类问题。
+    # 电压跌落导致 MCU 复位，机器人会在动作中途突然瘫掉。
+    keywords: [voltage drop, brownout, capacitor, esr, busbar, protection, fuse, reverse polarity]
+    reading:
+      - title: 电池内阻与放电曲线（你所用电芯的规格书）
+      - title: 低 ESR 电容在电机供电中的作用（任意电源设计入门材料）
+      - title: 机器人电源分配常见故障案例
+    checkpoints:
+      - 能解释「电池 24V，为什么电机一启动 MCU 就复位」
+      - 能说出分路供电、加电容、加粗线径各自解决什么问题
+      - 能设计一个带欠压监测和软保护的供电方案
+      - 知道防反接和保险丝为什么不能省
+
+  - id: c-mcu
+    order: 4
+    title: 引入下位机
+    goal: 让控制环路跑在实时系统上，上位机只负责发目标
+    prereq: [c-servo-bus]
+    estimated_days: 14
+    # 这是电控入门最好的第一个项目：做完这一个，你就从「入门」跳到「能设计」。
+    # 现成的坑：上位机是 Windows，不是实时系统，调度抖动可能几十毫秒，
+    # 而一个关节位置环需要 1kHz。
+    keywords: [mcu, stm32, esp32, timer, pwm, interrupt, realtime, control loop, firmware]
+    reading:
+      - title: STM32 HAL 或 ESP-IDF 的定时器 / 串口 / 中断 文档
+      - title: 任意一个开源关节控制器的固件（SimpleFOC 是最轻的入口）
+        url: https://docs.simplefoc.com/
+    checkpoints:
+      - 能在 MCU 上跑一个 1kHz 的定时中断，抖动小于 100 微秒
+      - 能设计一套「上位机发目标 → 下位机执行」的简单协议
+      - 能解释为什么控制环路不能放在 Windows 上
+      - 知道看门狗、失联保护、急停该怎么接
+
+  - id: c-feedback
+    order: 5
+    title: 反馈与闭环
+    goal: 从「发位置等它到」变成「知道它到没到、差多少、为什么差」
+    prereq: [c-mcu]
+    estimated_days: 10
+    keywords: [pid, encoder, feedback, closed loop, setpoint, integral windup, control loop]
+    reading:
+      - title: 任意控制理论入门教材的 PID 一章（重点是积分饱和和微分噪声）
+      - title: 编码器 / 磁编 / 霍尔 的原理与分辨率计算
+    checkpoints:
+      - 能手工整定一个位置环的 P、I、D，并说明每一步在改什么
+      - 能解释积分饱和怎么产生的，以及抗饱和怎么做
+      - 能测出系统的阶跃响应，并读出上升时间和超调
+      - 知道开环和闭环在「推一下会怎样」上的差别
+
+  - id: c-actuator
+    order: 6
+    title: 从舵机到 BLDC
+    goal: 拿到电流和力矩的控制权——这是做力控和柔顺的前提
+    prereq: [c-feedback]
+    estimated_days: 30
+    # 舵机是个黑盒：你只能发位置指令，拿不到电流和力矩。
+    # 这意味着永远做不了力控、碰撞检测、柔顺控制——而这些是具身的核心。
+    # 宇树、智元都用自研关节，原因就在这里。
+    keywords: [bldc, foc, field oriented control, torque control, current loop, svpwm, odrive, impedance]
+    reading:
+      - title: SimpleFOC 文档（最好的入门，能直接跑起来）
+        url: https://docs.simplefoc.com/
+      - title: ODrive 文档（工业级参考实现）
+        url: https://docs.odriverobotics.com/
+      - title: FOC 的 Clarke / Park 变换推导（任意电机学教材）
+    checkpoints:
+      - 能解释 FOC 为什么要把三相电流变到 dq 轴上
+      - 能说清电流环、速度环、位置环的带宽为什么必须依次降低
+      - 能测出一条电机的力矩-电流曲线
+      - 知道力控和位置控在硬件上要求差在哪
+
+  - id: c-bus
+    order: 7
+    title: 总线与实时性
+    goal: 让多个关节在同一时刻被同步命令，而不是「一个一个排队」
+    prereq: [c-mcu, c-feedback]
+    estimated_days: 10
+    keywords: [can bus, canopen, ethercat, realtime, jitter, latency, sync, socketcan]
+    reading:
+      - title: CAN 2.0B 规范（只看帧格式和仲裁部分）
+      - title: Linux SocketCAN 文档
+      - title: EtherCAT 与 CAN 的适用场景对比
+    checkpoints:
+      - 能算出 1Mbps CAN 上，20 个关节一轮同步要多久
+      - 能区分「平均延迟」和「抖动」，并知道为什么后者更致命
+      - 能测量并画出你系统的控制周期抖动分布
+      - 知道什么时候该上 EtherCAT，什么时候 CAN 就够
+
+  - id: c-time
+    order: 8
+    title: 时间对齐
+    goal: 让「看到的那一刻」和「动的那一刻」在时间上对得齐
+    prereq: [c-bus, c-feedback]
+    estimated_days: 7
+    # ⚠️ 这是整条电控线的落点，也是具身智能的本质。
+    # 你们现在「传输延迟不考虑」这一点，在前七格都只是小毛病，
+    # 但在这里是致命的：视觉延迟 50ms + 控制周期 10ms = 60ms 的世界错位。
+    # 你在做视觉模块，这一层天然有话语权。
+    keywords: [time sync, latency, timestamp, message_filters, sensor fusion, alignment, clock]
+    reading:
+      - title: ROS2 message_filters / TimeSynchronizer 文档
+      - title: 机器人系统中的时间戳与延迟分析（任意 SLAM / 多传感器融合材料）
+    checkpoints:
+      - 能画出「图像采集 → 推理 → 指令下发 → 电机响应」的完整时间链
+      - 能测出每一段的延迟，并指出最大的一段在哪
+      - 能解释为什么「只对齐频率」不等于「对齐时间」
+      - 能量化 60ms 的错位在一个抓取任务里会造成多少厘米的偏差

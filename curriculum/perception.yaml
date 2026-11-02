@@ -1,0 +1,188 @@
+# 感知线（具身视觉）
+# 这张表决定每天手机上那张「概念卡」讲什么，以及电脑端推荐往哪个方向偏。
+#
+# 字段说明
+#   id        唯一标识，进了推送记录就不能改（改了会重复学习）
+#   order     学习顺序，概念卡按这个顺序往下走
+#   goal      学完这一格，你应该能说的话
+#   prereq    前置节点（没学前置就跳到这儿，模型会提示）
+#   keywords  和前沿内容关联用：命中越多，当天前沿越可能落到这一格
+#   reading   原始材料（电脑端精读用）
+#   checkpoints  自测标准——你能做到这几点，就算过了
+
+track: perception
+name: 具身视觉与感知
+description: >-
+  从「相机拍到的图像」到「机器人知道自己在哪、物体在哪、该怎么动」。
+  顺序是刻意的：先把坐标和标定钉死，再谈位姿和 SLAM，
+  最后才碰学习类方法。跳过前四格直接学 VLA，会在真机上撞墙。
+
+nodes:
+  - id: p-camera-model
+    order: 1
+    title: 相机模型与内参
+    goal: 说清楚「一个像素坐标，怎么变成空间中的一条光线」
+    prereq: []
+    estimated_days: 3
+    keywords: [camera, intrinsics, pinhole, projection, distortion, fov, focal]
+    reading:
+      - title: 《视觉SLAM十四讲》第 5 章 相机与图像
+      - title: OpenCV 官方教程 Camera Calibration
+        url: https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
+      - title: 针孔模型与畸变（任意中文教材的「相机模型」一节）
+    checkpoints:
+      - 能手写投影公式，把一个 3D 点算到像素坐标
+      - 能说清 fx、fy、cx、cy 各自变大变小，图像会怎么变
+      - 能解释径向畸变和切向畸变分别由什么造成
+      - 知道为什么标定要用棋盘格，而不是随便拍几张
+
+  - id: p-hand-eye
+    order: 2
+    title: 手眼标定
+    goal: 说清楚「相机看到的坐标，怎么变成机械臂能用的坐标」
+    prereq: [p-camera-model]
+    estimated_days: 4
+    # 这一格是整个具身感知里性价比最高的技能：几乎所有真机问题
+    # 都会先在标定误差上体现出来
+    keywords: [hand-eye, calibration, extrinsic, ax=xb, eye-in-hand, eye-to-hand]
+    reading:
+      - title: Tsai & Lenz, A New Technique for Fully Autonomous and Efficient 3D Robotics Hand/Eye Calibration (1989)
+      - title: OpenCV calibrateHandEye 文档
+      - title: 《机器人学导论》中关于坐标系变换的章节
+    checkpoints:
+      - 能区分 eye-in-hand 和 eye-to-hand 两种装法，公式差别在哪
+      - 能写出 AX = XB 这个约束是怎么来的
+      - 知道为什么至少要若干个「位姿差异足够大」的采样点
+      - 能说出标定误差 2mm 在抓取任务里会放大成什么后果
+
+  - id: p-depth-pointcloud
+    order: 3
+    title: 深度与点云
+    goal: 从「一张图」走到「一片三维点」
+    prereq: [p-camera-model]
+    estimated_days: 3
+    keywords: [depth, point cloud, rgbd, stereo, structured light, tof, registration]
+    reading:
+      - title: Open3D 官方教程（点云读取、滤波、配准）
+        url: https://www.open3d.org/docs/release/tutorial/
+      - title: RGB-D 相机原理（RealSense / Orbbec 官方文档）
+    checkpoints:
+      - 能解释双目、结构光、ToF 三种深度方案各自的失效场景
+      - 知道为什么深度图边缘会有「飞点」，怎么滤
+      - 能用 Open3D 把一个点云配准到另一个点云上
+
+  - id: p-pose-estimation
+    order: 4
+    title: 位姿估计：PnP、ICP、6D Pose
+    goal: 给定一组对应点或一个模型，求出物体的位姿
+    prereq: [p-camera-model, p-depth-pointcloud]
+    estimated_days: 4
+    keywords: [pose estimation, pnp, icp, 6d pose, registration, ransac]
+    reading:
+      - title: OpenCV solvePnP / solvePnPRansac 文档
+      - title: Besl & McKay, A Method for Registration of 3-D Shapes (ICP, 1992)
+      - title: BOP Benchmark（6D 位姿评测基准）
+        url: https://bop.felk.cvut.cz/
+    checkpoints:
+      - 能说出 PnP 最少需要几个点，为什么
+      - 能解释 RANSAC 在这里解决的是什么问题
+      - 知道 ICP 一定会收敛到局部最优，怎么给初值才靠谱
+      - 能读懂 6D Pose 论文里的 ADD / ADD-S 指标
+
+  - id: p-lie-group
+    order: 5
+    title: 三维旋转：SO(3)、SE(3)、四元数
+    goal: 能自由地在旋转矩阵、四元数、李代数之间来回换
+    prereq: [p-pose-estimation]
+    estimated_days: 5
+    # ⚠️ 这一格是大多数人卡死的地方。所有「看起来玄」的东西根都在这里，
+    # 绕过去的人两年后会在同一个地方重新撞墙。
+    keywords: [rotation, quaternion, so3, se3, lie algebra, euler, gimbal lock]
+    reading:
+      - title: 《视觉SLAM十四讲》第 3–4 章（三维刚体运动 / 李群与李代数）
+      - title: Sola et al., A micro Lie theory for state estimation in robotics
+    checkpoints:
+      - 能解释为什么用四元数而不用欧拉角（万向锁到底是什么）
+      - 能手算两个旋转的复合、一个旋转的逆
+      - 能说清 so(3) 的「小量近似」为什么在优化里这么好用
+      - 知道 R 和 t 为什么不能直接相加做插值
+
+  - id: p-slam-vio
+    order: 6
+    title: SLAM 与 VIO 基础
+    goal: 知道 SLAM 系统由哪几块组成，以及什么时候该自己写、什么时候该直接用
+    prereq: [p-lie-group, p-pose-estimation]
+    estimated_days: 5
+    keywords: [slam, vio, visual odometry, loop closure, bundle adjustment, orb-slam]
+    reading:
+      - title: ORB-SLAM3 论文 + 开源代码
+      - title: 《视觉SLAM十四讲》第 7–9 章
+      - title: ROS2 中接入 VIO 的实践（VINS-Fusion / OpenVINS）
+    checkpoints:
+      - 能画出「前端跟踪 → 后端优化 → 回环」的数据流
+      - 能说出视觉 SLAM 什么时候会丢（低纹理、纯旋转、快速运动）
+      - 知道里程计漂移和回环修正的关系
+
+  - id: p-visual-servoing
+    order: 7
+    title: 视觉伺服
+    goal: 让「看到的位置误差」直接变成「关节的速度指令」
+    prereq: [p-camera-model, p-hand-eye]
+    estimated_days: 3
+    keywords: [visual servoing, ibvs, pbvs, image jacobian, servo]
+    reading:
+      - title: Chaumette & Hutchinson, Visual Servo Control (IEEE RAM 教程)
+    checkpoints:
+      - 能区分基于图像（IBVS）和基于位置（PBVS）两种方案
+      - 能说清 IBVS 为什么会撞到相机视野边缘
+      - 知道为什么真实系统里通常要加一个速度限幅
+
+  - id: p-imitation-learning
+    order: 8
+    title: 模仿学习与扩散策略
+    goal: 说清楚「从人类示范里学一个策略」在数学上到底在拟合什么
+    prereq: [p-lie-group]
+    estimated_days: 5
+    keywords: [imitation learning, behavior cloning, diffusion policy, act, demonstration, teleoperation]
+    reading:
+      - title: Diffusion Policy（Chi et al., 2023）
+      - title: ACT / ALOHA（Zhao et al., 2023）
+      - title: LeRobot 官方教程（HuggingFace）
+        url: https://github.com/huggingface/lerobot
+    checkpoints:
+      - 能解释行为克隆的「协变量偏移」问题，以及 DAgger 怎么缓解
+      - 能说清 diffusion policy 为什么要预测一段动作序列而不是单步
+      - 知道示教数据的质量和数量，哪个更卡脖子
+
+  - id: p-vla
+    order: 9
+    title: VLA 模型
+    goal: 知道当前主流 VLA 吃什么、吐什么、在哪失效
+    prereq: [p-imitation-learning]
+    estimated_days: 4
+    keywords: [vla, vision language action, rt-2, openvla, pi0, octo, embodied agent]
+    reading:
+      - title: RT-2（Google DeepMind, 2023）
+      - title: OpenVLA（2024，开源可复现）
+      - title: π0 / π0.5（Physical Intelligence）
+      - title: Octo（开源通用操作策略）
+    checkpoints:
+      - 能画出 VLA 的输入输出张量形状
+      - 能说出 VLA 和「传统抓取流水线」各自擅长的场景
+      - 知道为什么 VLA 在真机上会遇到「不知道什么时候不该动」的问题
+
+  - id: p-sim2real
+    order: 10
+    title: 仿真与 sim2real
+    goal: 能在仿真里把一件事跑通，并判断它搬到真机上会掉多少
+    prereq: [p-imitation-learning]
+    estimated_days: 5
+    keywords: [sim2real, isaac sim, mujoco, genesis, domain randomization, physics engine]
+    reading:
+      - title: MuJoCo 官方文档（最轻，先从这里开始）
+      - title: Isaac Sim / Isaac Lab 文档
+      - title: Domain Randomization 相关论文（OpenAI, 2018 起）
+    checkpoints:
+      - 能列出仿真和真实至少 5 个不一致的地方
+      - 能解释域随机化为什么有效，以及它的代价
+      - 知道「仿真里 99% 真机 30%」通常是什么原因造成的
