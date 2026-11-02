@@ -3,14 +3,15 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
-# 本地状态（这个要提交到仓库，云端靠它维持去重，所以不忽略）
-# data/seen.db
-# data/progress.json
-# data/push_state.json
-
-# 本地产物（云端会重新生成并直接部署，不需要提交）
+# 云端会重新生成并直接部署，不需要提交
 output/
-reading/
+
+# 运行日志
+data/run.log
+
+# reading/ 下只同步 queue.md 和你的笔记；归档和 PDF 是本地体积大的东西
+reading/archive/
+reading/pdfs/
 
 # 敏感信息
 .env

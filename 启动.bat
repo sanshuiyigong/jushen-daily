@@ -13,6 +13,18 @@ if not exist "%PY%" (
   exit /b 1
 )
 
+echo.
+echo [1/2] Syncing state from cloud...
+git -C "%~dp0" pull --ff-only --quiet 1>nul 2>nul
+if errorlevel 1 (
+  echo       skipped - no network, or the proxy is not running
+  echo       ^(local dedupe may be stale; the cloud copy is still correct^)
+) else (
+  echo       ok
+)
+
+echo [2/2] Generating today's digest...
+echo.
 "%PY%" "%~dp0run.py" --open %*
 set CODE=%ERRORLEVEL%
 
@@ -20,7 +32,7 @@ echo.
 if not "%CODE%"=="0" (
   echo [FAILED] exit code %CODE%
 ) else (
-  echo [OK] reading/queue.md updated
+  echo [OK] reading\queue.md updated
 )
 echo.
 pause

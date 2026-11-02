@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,33 @@ import requests
 LOG = logging.getLogger("push")
 
 STATE_FILE = "push_state.json"
+
+# 常见的本地代理端口，按优先级探测
+_LOCAL_PROXY_PORTS = (7897, 7890, 7891, 10809, 10808, 1080)
+
+
+def _detect_local_proxy() -> str:
+    """探测本机是否有正在监听的代理端口，有就返回它的 URL。
+
+    为什么需要这个：Python 的 requests 不读 Windows 系统代理设置，
+    只读 HTTP_PROXY / HTTPS_PROXY 环境变量。所以从这台机器直连 ntfy.sh
+    会走裸连接——实测要 14 秒，TLS 握手经常撑不住直接断掉。
+    走本地代理只要 1.8 秒。
+
+    GitHub Actions 的 runner 上没有这些端口，探测会失败并自动退回直连，
+    所以同一个函数在云端是安全的空操作。
+    """
+    for port in _LOCAL_PROXY_PORTS:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.35)
+        try:
+            if sock.connect_ex(("127.0.0.1", port)) == 0:
+                return f"http://127.0.0.1:{port}"
+        except OSError:
+            pass
+        finally:
+            sock.close()
+    return ""
 
 
 def default_page_url() -> str:
@@ -78,7 +106,8 @@ def send_ntfy(
     click: str = "",
     priority: int = 3,
     tags: list[str] | None = None,
-    timeout: int = 20,
+    timeout: int = 25,
+    proxies: dict[str, str] | None = None,
 ) -> bool:
     payload: dict[str, Any] = {
         "topic": topic,
@@ -98,6 +127,7 @@ def send_ntfy(
             data=body,
             headers={"Content-Type": "application/json; charset=utf-8"},
             timeout=timeout,
+            proxies=proxies,
         )
     except Exception as exc:  # noqa: BLE001
         LOG.warning("推送请求失败：%s", exc)
@@ -114,15 +144,88 @@ def send_ntfy(
     return True
 
 
-def _compose(day_data: dict[str, Any]) -> tuple[str, str]:
+LETTERS = "ABCDEF"
+
+
+def _clip_bytes(text: str, limit: int = 3600) -> str:
+    """按 UTF-8 字节数截断。ntfy 默认消息上限 4096 字节，中文一个字 3 字节。"""
+    raw = text.encode("utf-8")
+    if len(raw) <= limit:
+        return text
+    cut = raw[:limit].decode("utf-8", errors="ignore")
+    return cut.rstrip() + "\n…（截断了，完整版点开链接看）"
+
+
+def _full_body(cards: list[dict[str, Any]]) -> str:
+    """把概念卡、题目、前沿拼成一条能在通知里直接读完的正文。
+
+    答案单独放在最后一段，这样你可以先在通知里自测，再往下滑对答案。
+    """
+    parts: list[str] = []
+
+    concept = next((c for c in cards if c.get("kind") == "concept"), None)
+    if concept:
+        parts.append(f"▍{concept.get('title', '')}")
+        parts.append("")
+        body = str(concept.get("body") or "").strip()
+        if body:
+            parts.append(body)
+        if concept.get("analogy"):
+            parts.append("")
+            parts.append(f"打个比方：{concept['analogy']}")
+        if concept.get("misconception"):
+            parts.append(f"常见误解：{concept['misconception']}")
+
+    quizzes = [c for c in cards if c.get("kind") == "quiz"]
+    if quizzes:
+        parts.append("")
+        parts.append("▍自测")
+        parts.append("")
+        for i, q in enumerate(quizzes, 1):
+            parts.append(f"{i}. {q.get('question', '')}")
+            for j, opt in enumerate(q.get("options") or []):
+                parts.append(f"   {LETTERS[j] if j < len(LETTERS) else j}. {opt}")
+            parts.append("")
+        parts.append("▍答案")
+        parts.append("")
+        for i, q in enumerate(quizzes, 1):
+            try:
+                ans = int(q.get("answer", 0))
+            except (TypeError, ValueError):
+                ans = 0
+            letter = LETTERS[ans] if 0 <= ans < len(LETTERS) else str(ans)
+            explain = str(q.get("explain") or "").strip()
+            parts.append(f"{i}. {letter}" + (f" —— {explain}" if explain else ""))
+
+    frontier = next((c for c in cards if c.get("kind") == "frontier"), None)
+    if frontier:
+        parts.append("")
+        parts.append("▍前沿")
+        parts.append("")
+        parts.append(str(frontier.get("title", "")))
+        if frontier.get("oneline"):
+            parts.append(str(frontier["oneline"]))
+        if frontier.get("why"):
+            parts.append(f"→ {frontier['why']}")
+
+    return _clip_bytes("\n".join(parts))
+
+
+def _compose(day_data: dict[str, Any], *, full: bool = True) -> tuple[str, str]:
     """把一天的卡片包压成一条手机上看得到的通知。"""
     day = day_data.get("day") or datetime.now().strftime("%Y-%m-%d")
     cards = day_data.get("cards") or []
+    title = f"具身日报 · {day[5:]}"
+
+    if full:
+        body = _full_body(cards)
+        if body.strip():
+            return title, body
+
+    # 简短版（或者开启 full 但没有内容时退回）
     concept = next((c for c in cards if c.get("kind") == "concept"), None)
     frontier = next((c for c in cards if c.get("kind") == "frontier"), None)
     quiz_count = sum(1 for c in cards if c.get("kind") == "quiz")
-
-    title = f"具身日报 · {day[5:]}"
 
     lines: list[str] = []
     if concept:
@@ -162,7 +265,7 @@ def push_daily(
         LOG.info("今天已经推过了（%s），跳过。要重发用 --force-push", day)
         return False
 
-    title, message = _compose(day_data)
+    title, message = _compose(day_data, full=bool(push_cfg.get("include_content", True)))
     click = str(push_cfg.get("url") or "").strip() or default_page_url()
     if click:
         LOG.info("推送附带链接：%s", click)
@@ -174,6 +277,15 @@ def push_daily(
         if not topic:
             LOG.warning("push.topic 没配置，无法推送")
             return False
+
+        # 代理：显式配置优先，其次自动探测本地代理（云端不会命中，自动直连）
+        proxy_url = str(push_cfg.get("proxy") or "").strip()
+        if not proxy_url and bool(push_cfg.get("auto_proxy", True)):
+            proxy_url = _detect_local_proxy()
+        proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
+        if proxy_url:
+            LOG.info("推送将走代理 %s", proxy_url)
+
         ok = send_ntfy(
             server,
             topic,
@@ -182,6 +294,7 @@ def push_daily(
             click=click,
             priority=int(push_cfg.get("priority") or 3),
             tags=["robot"],
+            proxies=proxies,
         )
     else:
         LOG.warning("不认识的推送渠道：%s", channel)
@@ -190,3 +303,49 @@ def push_daily(
     if ok:
         mark_pushed(data_dir, day)
     return ok
+
+
+if __name__ == "__main__":
+    """预览 / 手动发送当天的推送。
+
+        python -m engine.push            只预览，不发
+        python -m engine.push --send     预览并真的发到手机
+    """
+    import sys
+
+    from .config import load_config, paths
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s", stream=sys.stdout)
+    cfg = load_config()
+    p = paths(cfg)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # 优先用今天的；今天还没生成就退回到最近一份，方便随时预览
+    day_dir = p["output"] / "days"
+    target = day_dir / f"day-{today}.json"
+    if not target.exists():
+        candidates = sorted(day_dir.glob("day-*.json"))
+        if not candidates:
+            print(f"还没有任何卡片包：{day_dir}")
+            print("先跑一次 run.py 生成内容。")
+            raise SystemExit(1)
+        target = candidates[-1]
+        print(f"今天（{today}）还没生成，用最近一份预览：{target.name}")
+
+    data = json.loads(target.read_text(encoding="utf-8"))
+    title, body = _compose(data, full=bool((cfg.get("push") or {}).get("include_content", True)))
+
+    print()
+    print("=" * 64)
+    print(f"标题: {title}")
+    print(f"正文: {len(body.encode('utf-8'))} 字节 / {len(body)} 字符")
+    print("=" * 64)
+    print(body)
+    print("=" * 64)
+
+    if "--send" in sys.argv:
+        print("\n正在发送…")
+        sent = push_daily(cfg, data, p["data"], force=True)
+        print("结果:", "已发送到手机 ✓" if sent else "发送失败 ✗")
+    else:
+        print("\n（只是预览。要真的发出去，加 --send）")

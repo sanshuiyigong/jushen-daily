@@ -35,6 +35,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-llm", action="store_true", help="强制走模板，不调 LLM")
     parser.add_argument("--no-push", action="store_true", help="不推送到手机")
     parser.add_argument("--force-push", action="store_true", help="今天推过了也重发一条")
+    parser.add_argument("--if-missing", action="store_true",
+                        help="今天已经生成过就直接退出（给定时任务用，避免重复跑）")
     parser.add_argument("--verbose", action="store_true", help="打印调试日志")
     args = parser.parse_args(argv)
 
@@ -48,6 +50,12 @@ def main(argv: list[str] | None = None) -> int:
     p = paths(cfg)
     store = SeenStore(p["data"] / "seen.db")
     day = datetime.now().strftime("%Y-%m-%d")
+
+    if args.if_missing:
+        already = p["output"] / "days" / f"day-{day}.json"
+        if already.exists():
+            logging.info("今天（%s）已经生成过，跳过。", day)
+            return 0
 
     if args.offline:
         items = store.load_items()
