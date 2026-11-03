@@ -54,10 +54,23 @@ def main(argv: list[str] | None = None) -> int:
     day = datetime.now().strftime("%Y-%m-%d")
 
     if args.if_missing:
+        # 两个判据：
+        #   1. output/days 里有今天的文件（本机跑过）
+        #   2. 归档里有今天的卡片（云端跑过，且已随 git pull 同步下来）
+        # 第二个判据是关键——output 不进仓库，但 data/archive 进，所以它能
+        # 告诉本机「云端今天已经做过了，别重复花钱」。
         already = p["output"] / "days" / f"day-{day}.json"
         if already.exists():
-            logging.info("今天（%s）已经生成过，跳过。", day)
+            logging.info("今天（%s）本地已经生成过，跳过。", day)
             return 0
+        try:
+            from engine.archive import iter_cards
+
+            if any(str(c.get("day")) == day for c in iter_cards(p["data"])):
+                logging.info("今天（%s）云端已经生成并归档，跳过。", day)
+                return 0
+        except Exception:  # noqa: BLE001
+            pass
 
     if args.offline:
         items = store.load_items()
