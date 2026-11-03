@@ -17,6 +17,7 @@ import subprocess
 import sys
 from datetime import datetime
 
+from engine.archive import append_day
 from engine.cardset import build_day, write_day, write_recent
 from engine.config import load_config, paths
 from engine.curriculum import Curriculum
@@ -109,6 +110,13 @@ def main(argv: list[str] | None = None) -> int:
     day_path = write_day(p["output"], day_data)
     recent_path = write_recent(p["output"], int(general.get("mobile_retention_days", 7)))
 
+    # 追加进长期归档 data/archive/YYYY-MM.jsonl —— 这是唯一能一直往后翻的地方
+    try:
+        archived = append_day(p["data"], day_data)
+    except Exception as exc:  # noqa: BLE001
+        logging.warning("归档失败（不影响今天的内容）：%s", exc)
+        archived = 0
+
     top = ranked[0] if ranked else None
     counts = day_data.get("counts") or {}
 
@@ -127,6 +135,8 @@ def main(argv: list[str] | None = None) -> int:
           f"· 前沿 {counts.get('frontier', 0)}    （{'LLM' if day_data.get('llm') else '模板'}）")
     if node.get("title"):
         print(f"  今日概念: {node.get('track_label')} · {node.get('title')}")
+    if archived:
+        print(f"  归档: 新增 {archived} 张 → data/archive/{day[:7]}.jsonl")
     frontier_cards = [c for c in day_data.get("cards", []) if c.get("kind") == "frontier"]
     if frontier_cards:
         f0 = frontier_cards[0]
