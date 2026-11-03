@@ -1,0 +1,23 @@
+# 临时探针：只用来验证「GitHub Actions 的 schedule 到底会不会触发」。
+# 每 5 分钟一次，只打印时间，不跑任何业务代码，不花钱。
+# 验证完就删掉这个文件。
+name: _schedule-probe
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: 打印触发时间
+        run: |
+          echo "触发方式: ${{ github.event_name }}"
+          echo "UTC 时间: $(date -u '+%Y-%m-%d %H:%M:%S')"
+          echo "北京时间: $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')"

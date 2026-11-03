@@ -12,6 +12,7 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import fields
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Iterator
 
@@ -63,6 +64,35 @@ class SeenStore:
         """只返回库里没有的（也就是今天真正的新东西）。"""
         known = self.known_keys()
         return [it for it in items if it.key not in known]
+
+    def pending(self, days: int = 14) -> list[Item]:
+        """最近 N 天抓到、但**从来没被推过**的条目。
+
+        为什么需要它：
+            只拿「今天新的」会让第二天的候选池只剩几条——昨天看过但没被选中的
+            好论文被永久排除。而「见过」不等于「判定过」：它可能只是当天输给了
+            更强的对手。所以候选池必须是「新的 ∪ 没推过的旧货」。
+        """
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=int(days))
+        ).strftime("%Y-%m-%d")
+        sql = (
+            "SELECT payload FROM seen "
+            "WHERE pushed = 0 AND substr(first_seen, 1, 10) >= ? "
+            "ORDER BY score DESC"
+        )
+        out: list[Item] = []
+        with self._conn() as con:
+            for row in con.execute(sql, (cutoff,)):
+                if not row["payload"]:
+                    continue
+                try:
+                    data = json.loads(row["payload"])
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(data, dict):
+                    out.append(Item(**{k: v for k, v in data.items() if k in _ITEM_FIELDS}))
+        return out
 
     def stats(self) -> dict[str, int]:
         with self._conn() as con:
