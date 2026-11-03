@@ -23,6 +23,7 @@ from engine.config import load_config, paths
 from engine.curriculum import Curriculum
 from engine.fetch import fetch_all
 from engine.llm import LLMClient
+from engine.models import Item
 from engine.push import push_daily
 from engine.rank import score_items
 from engine.render import render_queue, write_queue
@@ -64,9 +65,19 @@ def main(argv: list[str] | None = None) -> int:
         logging.info("离线模式：从库中读回 %d 条", new_count)
     else:
         raw = fetch_all(cfg)
-        items = store.filter_new(raw)
-        new_count = len(items)
-        logging.info("抓到 %d 条，其中首次出现 %d 条", len(raw), new_count)
+        fresh = store.filter_new(raw)
+        # 候选池 = 今天新抓到的 ∪ 最近 N 天抓到但**从没被推过**的。
+        # 只取新的会让第二天池子干涸——昨天输给强手的论文今天本该继续竞争。
+        pending = store.pending(days=int((cfg.get("general") or {}).get("candidate_days", 14)))
+        merged: dict[str, Item] = {it.key: it for it in pending}
+        for it in fresh:
+            merged[it.key] = it          # 新抓到的信息更新，覆盖旧的
+        items = list(merged.values())
+        new_count = len(fresh)
+        logging.info(
+            "抓到 %d 条（首次出现 %d 条），加上没推过的旧候选 %d 条 → 候选池 %d 条",
+            len(raw), len(fresh), len(pending), len(items),
+        )
 
     if not items:
         logging.info("没有新内容。仍会用库中数据重新渲染一次。")
@@ -126,6 +137,16 @@ def main(argv: list[str] | None = None) -> int:
             pushed = push_daily(cfg, day_data, p["data"], force=args.force_push)
         except Exception as exc:  # noqa: BLE001
             logging.warning("推送出错（不影响其他部分）：%s", exc)
+
+    # 真的推出去了，才把这条前沿标记为已推 —— 明天不再重复推同一条。
+    # 用 day_data 里记的 picked_key，而不是"所有过线的条目"，
+    # 因为只有被选中的那一条真正到过手机上。
+    picked_key = str(day_data.get("picked_key") or "")
+    if pushed and picked_key:
+        try:
+            store.mark_pushed([picked_key])
+        except Exception as exc:  # noqa: BLE001
+            logging.warning("标记已推失败：%s", exc)
 
     print()
     print("=" * 66)

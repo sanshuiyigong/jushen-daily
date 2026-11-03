@@ -66,10 +66,11 @@ def build_day(
     if node_info:
         track_hint = TRACK_LABEL.get(node_info["track"], node_info["track_label"])
 
+    # 宁缺毋滥：没有条目越过阈值，今天就只推概念和题。
+    # 绝不「退而取规则分前几名」——那会把 2 分的垃圾当成今天的前沿推出去。
     pool = [it for it in ranked if it.score >= threshold]
-    if not pool and ranked:
-        LOG.info("没有条目越过手机阈值，退而取规则分前几条做精排")
-        pool = ranked[: max(6, frontier_limit * 4)]
+    if not pool:
+        LOG.info("没有条目越过手机阈值（%s）—— 今天只推概念和题", threshold)
 
     picked: Item | None = None
     meta: dict[str, Any] = {}
@@ -78,6 +79,9 @@ def build_day(
         if result:
             picked, meta = result
             LOG.info("前沿精排：%s", meta.get("reason", ""))
+    elif pool:
+        # 没 LLM 时退回规则分第一名
+        picked = pool[0]
 
     if picked is not None:
         card = frontier_card(
@@ -91,9 +95,6 @@ def build_day(
         if meta.get("reason"):
             card["reason"] = meta["reason"]
         cards.append(card)
-    else:
-        for item in pool[:frontier_limit]:
-            cards.append(frontier_card(item, day, llm, track_hint))
 
     counts = {"concept": 0, "quiz": 0, "frontier": 0}
     for c in cards:
@@ -104,6 +105,8 @@ def build_day(
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "llm": bool(llm and llm.available),
         "node": node_info,
+        # 今天选中的前沿是哪一条（用于推送成功后标记 pushed，避免明天重复推）
+        "picked_key": picked.key if picked is not None else "",
         "counts": counts,
         "cards": cards,
     }

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
@@ -26,6 +27,12 @@ from typing import Any, Iterator
 LOG = logging.getLogger("archive")
 
 DIR_NAME = "archive"
+
+# 用户可能怎么输日期
+_RE_FULL = re.compile(r"^\d{4}-\d{2}-\d{2}$")     # 2026-11-03
+_RE_MONTH = re.compile(r"^\d{4}-\d{2}$")          # 2026-11
+_RE_MMDD = re.compile(r"^\d{1,2}-\d{1,2}$")       # 11-03
+_RE_COMPACT = re.compile(r"^\d{8}$")              # 20261103
 
 
 def archive_dir(data_dir: Path) -> Path:
@@ -107,6 +114,58 @@ def iter_cards(
 
 
 _KIND_LABEL = {"concept": "概念", "quiz": "题", "frontier": "前沿"}
+
+
+def days_index(data_dir: Path) -> list[dict[str, Any]]:
+    """按天汇总，给界面画时间线用。新的在前。"""
+    buckets: dict[str, dict[str, int]] = {}
+    for card in iter_cards(data_dir):
+        day = str(card.get("day") or "")
+        if not day:
+            continue
+        b = buckets.setdefault(day, {"concept": 0, "quiz": 0, "frontier": 0})
+        kind = str(card.get("kind") or "")
+        if kind in b:
+            b[kind] += 1
+    out = [{"day": d, **v, "total": sum(v.values())} for d, v in buckets.items()]
+    out.sort(key=lambda x: x["day"], reverse=True)
+    return out
+
+
+def query(data_dir: Path, q: str = "", *, limit: int = 60) -> dict[str, Any]:
+    """一个入口处理「按日期」和「按关键词」两种查法。
+
+    输入看起来像日期就按日期查（支持 2026-11-03 / 2026-11 / 11-03 / 20261103），
+    否则在当前月里做关键词搜索。返回的 cards 按时间正序，方便阅读。
+    """
+    text = (q or "").strip()
+
+    if not text:
+        cards = list(iter_cards(data_dir))[-limit:]
+        return {"mode": "recent", "label": "最近归档", "count": len(cards), "cards": cards}
+
+    # 20261103 → 2026-11-03
+    if _RE_COMPACT.match(text):
+        text_date = f"{text[:4]}-{text[4:6]}-{text[6:]}"
+        cards = [c for c in iter_cards(data_dir) if str(c.get("day")) == text_date]
+        return {"mode": "day", "label": text_date, "count": len(cards), "cards": cards}
+
+    if _RE_FULL.match(text):
+        cards = [c for c in iter_cards(data_dir) if str(c.get("day")) == text]
+        return {"mode": "day", "label": text, "count": len(cards), "cards": cards}
+
+    if _RE_MONTH.match(text):
+        cards = [c for c in iter_cards(data_dir) if str(c.get("day", "")).startswith(text)]
+        return {"mode": "month", "label": text, "count": len(cards), "cards": cards}
+
+    if _RE_MMDD.match(text):
+        mm, dd = text.split("-")
+        suffix = f"-{int(mm):02d}-{int(dd):02d}"
+        cards = [c for c in iter_cards(data_dir) if str(c.get("day", "")).endswith(suffix)]
+        return {"mode": "day", "label": suffix.strip("-"), "count": len(cards), "cards": cards}
+
+    hits = search(data_dir, text, limit=limit)
+    return {"mode": "keyword", "label": text, "count": len(hits), "cards": hits}
 
 
 def _card_text(card: dict[str, Any]) -> str:

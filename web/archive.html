@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>具身日报 · 存档</title>
+<link rel="icon" href="favicon.ico">
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#14181f; --panel2:#1b2029; --line:#262c37;
+    --fg:#e6e9ef; --dim:#8892a3; --accent:#7dd3fc; --ok:#4ade80;
+    --red:#e11d48; --orange:#f97316; --amber:#eab308; --blue:#3b82f6;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+    font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  body{padding:0 0 80px}
+
+  header{position:sticky;top:0;z-index:10;background:rgba(11,14,19,.96);
+    backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:14px 24px}
+  .hrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap;max-width:1100px;margin:0 auto}
+  h1{margin:0;font-size:15px;font-weight:600}
+  a.back{color:var(--dim);text-decoration:none;font-size:13px;padding:5px 11px;
+    border:1px solid var(--line);border-radius:8px}
+  a.back:hover{color:var(--fg);border-color:#3d4757}
+  .pill{font-size:12px;color:var(--dim);background:var(--panel2);
+    border:1px solid var(--line);border-radius:20px;padding:3px 11px}
+  .pill b{color:var(--fg)}
+
+  main{max-width:1100px;margin:0 auto;padding:22px 24px}
+
+  .search{display:flex;gap:10px;margin-bottom:14px}
+  .search input{flex:1;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:14px 18px;color:var(--fg);font:15px/1.4 inherit}
+  .search input:focus{outline:none;border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(125,211,252,.12)}
+  .search input::placeholder{color:#5a6474}
+  .search button{background:var(--accent);color:#08131a;border:none;border-radius:12px;
+    padding:0 22px;font-weight:600;font-size:14px;cursor:pointer}
+
+  .hint{color:var(--dim);font-size:12.5px;margin-bottom:16px;line-height:1.8}
+  .hint code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:12px}
+
+  .days{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+  .chip{background:var(--panel);border:1px solid var(--line);border-radius:9px;
+    padding:6px 12px;font-size:12.5px;color:var(--dim);cursor:pointer;transition:.12s;
+    font-family:inherit}
+  .chip:hover{border-color:var(--accent);color:var(--fg)}
+  .chip.on{background:rgba(125,211,252,.14);border-color:var(--accent);color:var(--accent)}
+  .chip b{color:var(--fg);font-weight:600}
+
+  .reshead{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);
+    margin:0 0 12px;font-weight:600}
+
+  .daygroup{margin-bottom:26px}
+  .daylabel{font-size:13px;color:var(--accent);font-weight:600;margin-bottom:10px;
+    padding-bottom:6px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line);
+    border-radius:12px;padding:15px 18px;margin-bottom:11px}
+  .card.concept{border-left-color:var(--blue)}
+  .card.quiz{border-left-color:var(--amber)}
+  .card.frontier{border-left-color:var(--red)}
+  .card .kind{font-size:11px;letter-spacing:.5px;color:var(--dim);margin-bottom:7px;
+    display:flex;gap:10px;align-items:center}
+  .card .kind .sc{color:var(--red);font-weight:600}
+  .card h3{margin:0 0 9px;font-size:15.5px;line-height:1.5;font-weight:600}
+  .card .en{font-size:11.5px;color:#5f6a7d;margin:-4px 0 10px}
+  .card .body{font-size:14px;line-height:1.8;color:#c3cad6;white-space:pre-wrap}
+  .card .note{background:var(--panel2);border-radius:9px;padding:10px 13px;margin-top:10px;
+    font-size:13px;color:#b9c1cf;line-height:1.7}
+  .card .note b{color:var(--accent);font-size:11.5px;display:block;margin-bottom:3px;font-weight:600}
+  .card ol{margin:8px 0 0;padding-left:0;list-style:none}
+  .card ol li{font-size:13.5px;line-height:1.7;padding:5px 0 5px 26px;position:relative;color:#c3cad6}
+  .card ol li.ans{color:var(--ok)}
+  .card ol li .let{position:absolute;left:0;top:5px;color:var(--dim);font-weight:600}
+  .card ol li.ans .let{color:var(--ok)}
+  .links{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+  .links a{font-size:12.5px;color:var(--accent);text-decoration:none;background:var(--panel2);
+    border:1px solid var(--line);padding:5px 11px;border-radius:7px}
+
+  .empty{background:var(--panel);border:1px dashed var(--line);border-radius:12px;
+    padding:34px;text-align:center;color:var(--dim);font-size:13.5px;line-height:1.9}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--dim);
+    border-top-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <a class="back" href="admin.html">← 回控制台</a>
+    <h1>卡片存档</h1>
+    <span class="pill" id="stat">–</span>
+  </div>
+</header>
+
+<main>
+  <div class="search">
+    <input id="q" placeholder="输入日期（2026-11-03 / 11-03 / 2026-11）或关键词（标定、VLA、压降）" autocomplete="off">
+    <button id="btn">查找</button>
+  </div>
+
+  <div class="hint">
+    <code>2026-11-03</code> 看某一天 · <code>2026-11</code> 看整月 · <code>11-03</code> 按日期搜 ·
+    其他任何词都当关键词搜（标题、正文、题干、选项、解析都会查）
+  </div>
+
+  <div class="days" id="days"></div>
+
+  <div class="reshead" id="reshead">加载中…</div>
+  <div id="results"></div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const KIND = {concept:'概念', quiz:'题', frontier:'前沿'};
+const LETTERS = 'ABCDEF';
+let currentQ = '';
+
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function api(path, payload){
+  const res = await fetch(path, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload || {})
+  });
+  return await res.json();
+}
+
+function renderStats(s){
+  if(!s) return;
+  $('stat').innerHTML = `共 <b>${s.cards}</b> 张 / <b>${s.days}</b> 天 / <b>${(s.bytes/1024).toFixed(0)}</b> KB`;
+}
+
+function renderDays(days){
+  const box = $('days');
+  if(!days || !days.length){ box.innerHTML = ''; return; }
+  box.innerHTML = days.map(d =>
+    `<button class="chip" data-day="${d.day}">${d.day.slice(5)} <b>${d.total}</b></button>`
+  ).join('');
+  box.querySelectorAll('button[data-day]').forEach(b =>
+    b.addEventListener('click', () => { $('q').value = b.dataset.day; run(b.dataset.day); }));
+}
+
+function cardHtml(c){
+  const kind = c.kind || '';
+  const label = KIND[kind] || kind;
+  const score = c.score != null ? `<span class="sc">${Number(c.score).toFixed(2)}</span>` : '';
+  let inner = '';
+
+  const zh = c.title_zh ? `<div class="en">${esc(c.title)}</div>` : '';
+  const title = c.title_zh || c.title || c.question || '';
+  const h3 = kind === 'quiz'
+    ? `<h3>${esc(c.question || '')}</h3>`
+    : `<h3>${esc(title)}</h3>${zh}`;
+
+  if(kind === 'concept'){
+    inner = `<div class="body">${esc(c.body || '')}</div>`
+      + (c.analogy ? `<div class="note"><b>打个比方</b>${esc(c.analogy)}</div>` : '')
+      + (c.misconception ? `<div class="note"><b>常见误解</b>${esc(c.misconception)}</div>` : '');
+  }else if(kind === 'quiz'){
+    const opts = (c.options || []).map((o, i) => {
+      const on = i === c.answer;
+      return `<li class="${on ? 'ans' : ''}"><span class="let">${LETTERS[i] || i}</span>${esc(o)}${on ? '  ✔' : ''}</li>`;
+    }).join('');
+    inner = `<ol>${opts}</ol>`
+      + (c.explain ? `<div class="note"><b>解析</b>${esc(c.explain)}</div>` : '');
+  }else{
+    inner = (c.oneline ? `<div class="body">${esc(c.oneline)}</div>` : '')
+      + (c.why ? `<div class="note"><b>为什么给你看</b>${esc(c.why)}</div>` : '')
+      + (c.reason ? `<div class="note"><b>精排理由</b>${esc(c.reason)}</div>` : '');
+    const links = c.links || {};
+    const names = {arxiv:'arXiv', pdf:'PDF', code:'代码', project:'主页', origin:'原文'};
+    const ls = Object.entries(links).map(([k, v]) =>
+      `<a href="${esc(v)}" target="_blank" rel="noopener">${names[k] || k}</a>`).join('');
+    if(ls) inner += `<div class="links">${ls}</div>`;
+  }
+
+  return `<div class="card ${esc(kind)}">
+    <div class="kind"><span>${esc(label)}</span>${score}</div>
+    ${h3}${inner}
+  </div>`;
+}
+
+function renderResults(r){
+  const box = $('results');
+  if(!r.ok){ box.innerHTML = `<div class="empty">出错：${esc(r.error)}</div>`; return; }
+
+  const modeText = {recent:'最近归档', day:'按日期', month:'按月份', keyword:'关键词搜索'}[r.mode] || '';
+  $('reshead').innerHTML = `${modeText} · ${esc(r.label || '')} · 命中 <b>${r.count}</b> 张`;
+
+  if(!r.cards || !r.cards.length){
+    box.innerHTML = `<div class="empty">没有找到。<br>试试 <code>2026-11</code> 或别的关键词。</div>`;
+    return;
+  }
+
+  // 按天分组
+  const groups = {};
+  for(const c of r.cards){ (groups[c.day] = groups[c.day] || []).push(c); }
+  const days = Object.keys(groups).sort().reverse();
+
+  box.innerHTML = days.map(day => `
+    <div class="daygroup">
+      <div class="daylabel"><span>${esc(day)}</span><span style="color:var(--dim);font-weight:400">${groups[day].length} 张</span></div>
+      ${groups[day].map(cardHtml).join('')}
+    </div>`).join('');
+}
+
+async function run(q){
+  currentQ = q || '';
+  $('results').innerHTML = '<div class="empty"><span class="spin"></span> 查询中…</div>';
+  try{
+    const r = await api('/api/archive', {q: currentQ, limit: 200});
+    renderStats(r.stats);
+    renderDays(r.days);
+    renderResults(r);
+  }catch(e){
+    $('results').innerHTML = `<div class="empty">请求失败：${esc(e.message)}</div>`;
+  }
+}
+
+let timer = null;
+$('q').addEventListener('input', e => {
+  clearTimeout(timer);
+  timer = setTimeout(() => run(e.target.value.trim()), 350);
+});
+$('q').addEventListener('keydown', e => { if(e.key === 'Enter') { clearTimeout(timer); run(e.target.value.trim()); } });
+$('btn').addEventListener('click', () => run($('q').value.trim()));
+
+run('');
+$('q').focus();
+</script>
+</body>
+</html>

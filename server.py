@@ -25,6 +25,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
+from engine.archive import days_index, query as archive_query, stats as archive_stats  # noqa: E402
 from engine.assistant import apply as apply_patch_call  # noqa: E402
 from engine.assistant import ask as ask_call  # noqa: E402
 from engine.config import load_config  # noqa: E402
@@ -92,6 +93,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path in ("/admin", "/admin/", "/admin.html"):
             self._redirect("/web/admin.html")
             return
+        if self.path in ("/archive", "/archive/", "/archive.html"):
+            self._redirect("/web/archive.html")
+            return
         super().do_GET()
 
     # ----------------------------------------------------------- POST
@@ -108,6 +112,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._handle_status()
             elif route == "/api/pool":
                 self._handle_pool()
+            elif route == "/api/archive":
+                self._handle_archive()
             else:
                 self._send_json({"ok": False, "error": f"未知接口：{route}"}, 404)
         except Exception as exc:  # noqa: BLE001
@@ -178,6 +184,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "items": rows,
             }
         )
+
+    def _handle_archive(self) -> None:
+        """卡片存档：按日期或关键词查。"""
+        data = self._read_json()
+        q = str(data.get("q") or "").strip()
+        try:
+            limit = int(data.get("limit") or 60)
+        except (TypeError, ValueError):
+            limit = 60
+        data_dir = ROOT / "data"
+        try:
+            result = archive_query(data_dir, q, limit=limit)
+            index = days_index(data_dir)
+            s = archive_stats(data_dir)
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("存档查询失败：%s", exc)
+            self._send_json({"ok": False, "error": str(exc)})
+            return
+        self._send_json({"ok": True, **result, "days": index, "stats": s})
 
     def _handle_dryrun(self) -> None:
         data = self._read_json()
