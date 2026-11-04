@@ -134,14 +134,20 @@ def main(argv: list[str] | None = None) -> int:
         cur.start(str(node["node_id"]), day)
 
     day_path = write_day(p["output"], day_data)
-    recent_path = write_recent(p["output"], int(general.get("mobile_retention_days", 7)))
 
-    # 追加进长期归档 data/archive/YYYY-MM.jsonl —— 这是唯一能一直往后翻的地方
+    # 先归档，再合并最近几天：write_recent 会用归档补齐 output 里没有的历史天
+    # （云端每次都是全新签出，output/ 不进仓库，只有当天那一个文件）
     try:
         archived = append_day(p["data"], day_data)
     except Exception as exc:  # noqa: BLE001
         logging.warning("归档失败（不影响今天的内容）：%s", exc)
         archived = 0
+
+    recent_path = write_recent(
+        p["output"],
+        int(general.get("mobile_retention_days", 7)),
+        data_dir=p["data"],
+    )
 
     top = ranked[0] if ranked else None
     counts = day_data.get("counts") or {}

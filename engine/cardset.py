@@ -128,21 +128,45 @@ def write_day(output_dir: Path, day_data: dict[str, Any]) -> Path:
     return path
 
 
-def write_recent(output_dir: Path, keep_days: int = 7) -> Path:
-    """把最近 N 天的卡片包合并成 recent7.json —— 手机端只请求这一个文件。"""
+def write_recent(output_dir: Path, keep_days: int = 7, data_dir: Path | None = None) -> Path:
+    """把最近 N 天的卡片包合并成 recent7.json —— 手机端只请求这一个文件。
+
+    为什么要读 data_dir（归档）：
+        云端每次运行都是全新签出，而 output/ 不进仓库，所以云端只看得见当天
+        那一个 day 文件——「最近 7 天」在云端从来没生效过，永远只有 1 天。
+        归档 data/archive 是进仓库的，用它补齐 output 里没有的历史天。
+    """
     days_dir = Path(output_dir) / "days"
     files = sorted(days_dir.glob("day-*.json"), key=lambda p: p.name, reverse=True)[:keep_days]
-    days: list[dict[str, Any]] = []
-    cards: list[dict[str, Any]] = []
+
+    by_day: dict[str, list[dict[str, Any]]] = {}
     for f in sorted(files, key=lambda p: p.name):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             LOG.warning("跳过损坏的卡片包：%s", f.name)
             continue
-        day_cards = data.get("cards", [])
-        days.append({"day": data.get("day"), "count": len(day_cards)})
-        cards.extend(day_cards)
+        day = str(data.get("day") or "")
+        if day:
+            by_day[day] = data.get("cards") or []
+
+    # 补齐 output 里没有、但归档里有的天
+    if data_dir is not None:
+        try:
+            from .archive import available_days, day_cards_latest
+
+            for day in available_days(Path(data_dir))[-keep_days:]:
+                if day in by_day:
+                    continue
+                cards = day_cards_latest(Path(data_dir), day)
+                if cards:
+                    by_day[day] = cards
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("从归档补历史失败（不影响今天）：%s", exc)
+
+    recent = sorted(by_day)[-keep_days:]
+    days = [{"day": d, "count": len(by_day[d])} for d in recent]
+    cards = [c for d in recent for c in by_day[d]]
 
     payload = {
         "generated_at": stamp_bj(),

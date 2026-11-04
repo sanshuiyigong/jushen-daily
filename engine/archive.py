@@ -66,21 +66,31 @@ def _iter_file(path: Path) -> Iterator[dict[str, Any]]:
 
 
 def append_day(data_dir: Path, day_data: dict[str, Any]) -> int:
-    """把一天的卡片追加进归档。已存在的 (day, id) 不会重复写。返回新写入条数。"""
+    """把一天的卡片写进归档。
+
+    同一天重新生成时**替换旧的那批**，而不是继续往后追加。
+    理由：归档的作用是「每天一份权威记录」，不是「每次生成的历史版本」。
+    如果一直追加，网页补历史天时同一天会冒出两套卡片（重复且互相矛盾）。
+    """
     day = str(day_data.get("day") or today_bj())
     cards = day_data.get("cards") or []
     if not cards:
         return 0
 
     path = month_file(data_dir, day)
-    seen = {str(c.get("id")) for c in _iter_file(path) if str(c.get("day")) == day}
+
+    # 保留其他天的记录，丢掉这一天的旧版本
+    others: list[str] = []
+    for rec in _iter_file(path):
+        if str(rec.get("day")) == day:
+            continue
+        others.append(json.dumps(rec, ensure_ascii=False))
 
     fresh: list[str] = []
     for card in cards:
         cid = str(card.get("id") or "")
-        if not cid or cid in seen:
+        if not cid:
             continue
-        seen.add(cid)
         record = dict(card)
         record["day"] = day
         record["archived_at"] = stamp_bj()
@@ -89,10 +99,13 @@ def append_day(data_dir: Path, day_data: dict[str, Any]) -> int:
     if not fresh:
         return 0
 
-    with open(path, "a", encoding="utf-8") as fh:
-        for line in fresh:
-            fh.write(line + "\n")
-    LOG.info("归档 %d 张卡片 → %s", len(fresh), path.name)
+    # 整文件原子重写（文件很小，一个月也就几十 KB）
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text("\n".join(others + fresh) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+    LOG.info("归档 %d 张卡片（%s）→ %s", len(fresh), day, path.name)
     return len(fresh)
 
 
@@ -117,6 +130,35 @@ def iter_cards(
 
 
 _KIND_LABEL = {"concept": "概念", "quiz": "题", "frontier": "前沿"}
+
+
+def available_days(data_dir: Path) -> list[str]:
+    """归档里有哪些天（升序）。"""
+    return sorted({str(c.get("day")) for c in iter_cards(data_dir) if c.get("day")})
+
+
+def day_cards_latest(data_dir: Path, day: str) -> list[dict[str, Any]]:
+    """取某一天的卡片，按 id 去重（同一 id 保留最后写入的那份）。
+
+    正常情况下 append_day 已经把同一天的旧版本替换掉了，这里再去重一次，
+    是为了兼容老数据——早期版本会往同一天追加多批。
+    """
+    latest: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for card in iter_cards(data_dir):
+        if str(card.get("day")) != day:
+            continue
+        cid = str(card.get("id") or "")
+        if not cid:
+            continue
+        if cid not in latest:
+            order.append(cid)
+        latest[cid] = card
+
+    cards = [latest[i] for i in order]
+    kind_order = {"concept": 0, "quiz": 1, "frontier": 2}
+    cards.sort(key=lambda c: (kind_order.get(str(c.get("kind")), 9), str(c.get("id"))))
+    return cards
 
 
 def days_index(data_dir: Path) -> list[dict[str, Any]]:
