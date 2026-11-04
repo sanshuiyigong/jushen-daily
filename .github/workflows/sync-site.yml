@@ -18,6 +18,7 @@ on:
       - "web/**"
       - "engine/**"
       - "tools/build_site.py"
+      - ".gitignore"
   workflow_dispatch:
 
 permissions:

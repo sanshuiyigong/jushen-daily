@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -25,3 +25,5 @@ config.local.yaml
 
 # 改配置时自动留的备份，不进仓库
 data/patches/
+# Pages 构建产物（由 tools/build_site.py 生成）
+public/
