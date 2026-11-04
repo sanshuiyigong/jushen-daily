@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>具身日报</title>
+<link rel="icon" href="favicon.ico">
+<style>
+  :root{
+    --bg:#0f1115; --card:#181b22; --card2:#1f232c; --line:#2a2f3a;
+    --fg:#e6e9ef; --dim:#8b93a3; --accent:#7dd3fc; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  body{padding:env(safe-area-inset-top) 0 calc(32px + env(safe-area-inset-bottom))}
+  .wrap{max-width:640px;margin:0 auto;padding:0 16px}
+
+  header{padding:22px 0 10px}
+  h1{margin:0;font-size:19px;font-weight:600;letter-spacing:.3px}
+  .sub{color:var(--dim);font-size:13px;margin-top:5px}
+
+  .stats{display:flex;gap:10px;margin:16px 0 20px}
+  .stat{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 10px;text-align:center}
+  .stat b{display:block;font-size:22px;font-weight:600;line-height:1.2}
+  .stat span{font-size:11px;color:var(--dim)}
+
+  .btn{display:block;width:100%;padding:15px;border:none;border-radius:14px;
+    background:var(--accent);color:#08131a;font-size:16px;font-weight:600;cursor:pointer}
+  .btn:active{transform:scale(.985)}
+  .btn.ghost{background:var(--card2);color:var(--fg);border:1px solid var(--line)}
+
+  h2{font-size:13px;color:var(--dim);font-weight:600;letter-spacing:.6px;
+     text-transform:uppercase;margin:26px 0 10px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:16px;margin-bottom:12px}
+  .card .tag{font-size:11px;color:var(--accent);letter-spacing:.5px;margin-bottom:7px}
+  .card h3{margin:0 0 9px;font-size:17px;line-height:1.45;font-weight:600}
+  .card p{margin:0 0 10px;font-size:14.5px;color:#c3cad6}
+  .card .why{color:var(--dim);font-size:13px;border-left:2px solid var(--accent);
+    padding-left:10px;margin:12px 0 0}
+  .links{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .links a{font-size:13px;color:var(--accent);text-decoration:none;
+    background:var(--card2);border:1px solid var(--line);padding:7px 13px;border-radius:9px}
+  .score{float:right;font-size:12px;color:var(--dim);background:var(--card2);
+    padding:2px 9px;border-radius:7px}
+
+  .empty{background:var(--card);border:1px dashed var(--line);border-radius:16px;
+    padding:20px 16px;text-align:center;color:var(--dim);font-size:13.5px;line-height:1.7}
+
+  /* ---- 答题模式 ---- */
+  #focus{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);z-index:20}
+  #focus.on{display:flex}
+  .fbar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;
+    border-bottom:1px solid var(--line);flex:0 0 auto}
+  .fbar .x{background:none;border:none;color:var(--dim);font-size:15px;cursor:pointer;padding:6px}
+  .fbar .prog{font-size:13px;color:var(--dim)}
+  .fbody{flex:1 1 auto;overflow-y:auto;padding:22px 18px}
+  .fcard{max-width:640px;margin:0 auto}
+  .fcard .qtitle{font-size:19px;font-weight:600;line-height:1.5;margin:0 0 16px}
+  .fcard .body{font-size:15.5px;line-height:1.8;color:#c8cfdb;white-space:pre-wrap}
+  .fnote{background:var(--card2);border-radius:11px;padding:12px 14px;margin-top:14px;font-size:14px;color:#b9c1cf}
+  .fnote b{color:var(--accent);font-weight:600;display:block;margin-bottom:4px;font-size:12px}
+
+  .opt{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+    border-radius:12px;padding:14px 16px;margin-bottom:10px;color:var(--fg);font-size:15px;
+    line-height:1.5;cursor:pointer;font-family:inherit}
+  .opt.right{border-color:var(--ok);background:rgba(74,222,128,.1)}
+  .opt.wrong{border-color:var(--bad);background:rgba(248,113,113,.1)}
+  .opt .let{opacity:.5;margin-right:10px;font-weight:600;font-size:14px}
+  .explain{margin-top:14px;font-size:14.5px;line-height:1.75;color:#c3cad6;
+    background:var(--card2);border-radius:12px;padding:14px}
+
+  .fbottom{flex:0 0 auto;padding:14px 18px calc(14px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);display:none;gap:10px}
+  .fbottom.on{display:flex}
+  .rate{flex:1;padding:14px 6px;border-radius:12px;border:1px solid var(--line);
+    background:var(--card);color:var(--fg);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+  .rate.r1{border-color:#7f1d1d;color:#fca5a5}
+  .rate.r2{border-color:#78350f;color:#fcd34d}
+  .rate.r3{border-color:#14532d;color:#86efac}
+
+  .done{text-align:center;padding:60px 20px;color:var(--dim)}
+  .done .big{font-size:46px;margin-bottom:14px}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>具身日报</h1>
+    <div class="sub" id="dateline">加载中…</div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><b id="s-due">–</b><span>待学</span></div>
+    <div class="stat"><b id="s-days">–</b><span>待补天数</span></div>
+    <div class="stat"><b id="s-streak">–</b><span>连续天数</span></div>
+  </div>
+
+  <button class="btn" id="startBtn">开始</button>
+
+  <h2>今日前沿</h2>
+  <div id="frontier"></div>
+
+  <h2>学习卡片</h2>
+  <div id="cards"></div>
+</div>
+
+<!-- 答题模式 -->
+<div id="focus">
+  <div class="fbar">
+    <button class="x" id="closeBtn">✕</button>
+    <span class="prog" id="prog"></span>
+    <button class="x" id="nextBtn">›</button>
+  </div>
+  <div class="fbody"><div class="fcard" id="fcard"></div></div>
+  <div class="fbottom" id="fbottom">
+    <button class="rate r1" data-level="0">不会</button>
+    <button class="rate r2" data-level="1">模糊</button>
+    <button class="rate r3" data-level="2">会</button>
+  </div>
+</div>
+
+<script>
+const STORE = 'jushen:v1';
+// 页面既可能挂在 /web/ 下，也可能被复制到站点根目录，所以按顺序试几个路径
+const DATA_PATHS = ['../output/recent7.json', 'output/recent7.json', './output/recent7.json'];
+const INTERVAL = [1, 3, 7];                   // 不会1天 模糊3天 会7天
+const LET = ['A','B','C','D','E','F'];        // 选项标号
+
+let DATA = { cards: [], days: [] };
+let Q = [];          // 当前待学队列
+let QI = 0;
+let answered = false;
+
+const pad = n => String(n).padStart(2, '0');
+const ymd = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+function addDays(base, n){
+  const d = new Date(base + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return ymd(d);
+}
+function loadState(){
+  try { return JSON.parse(localStorage.getItem(STORE)) || { cards:{}, streak:{last:null,count:0} }; }
+  catch { return { cards:{}, streak:{last:null,count:0} }; }
+}
+let state = loadState();
+function saveState(){ localStorage.setItem(STORE, JSON.stringify(state)); }
+
+/* ---------------- 数据 ---------------- */
+async function boot(){
+  try{
+    DATA = await loadData();
+  }catch(e){
+    document.getElementById('dateline').textContent = '数据加载失败：' + e.message;
+    document.getElementById('frontier').innerHTML =
+      '<div class="empty">还没生成卡片包。<br>先在电脑上双击 <b>启动.bat</b></div>';
+    return;
+  }
+  render();
+}
+
+async function loadData(){
+  let lastErr = null;
+  for(const p of DATA_PATHS){
+    try{
+      const res = await fetch(p, { cache:'no-store' });
+      if(res.ok) return await res.json();
+      lastErr = new Error(p + ' -> HTTP ' + res.status);
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('找不到数据文件');
+}
+
+function today(){ return ymd(); }
+
+function dueList(){
+  const t = today();
+  return (DATA.cards || [])
+    .filter(c => c.kind === 'concept' || c.kind === 'quiz')
+    .filter(c => { const r = state.cards[c.id]; return !r || r.due <= t; })
+    .sort((a,b) => (a.day||'').localeCompare(b.day||'') || (a.kind === 'concept' ? -1 : 1));
+}
+
+function pendingDays(){
+  const t = today();
+  const set = new Set();
+  dueList().forEach(c => { if(c.day && c.day < t) set.add(c.day); });
+  return set.size;
+}
+
+/* ---------------- 渲染首页 ---------------- */
+function render(){
+  const dl = document.getElementById('dateline');
+  const meta = DATA.days && DATA.days.length
+    ? `覆盖 ${DATA.days.length} 天 · 更新于 ${(DATA.generated_at||'').slice(11,16)}`
+    : '暂无数据';
+  dl.textContent = `${today()} · ${meta}`;
+
+  Q = dueList();
+  document.getElementById('s-due').textContent = Q.length;
+  document.getElementById('s-days').textContent = pendingDays();
+  document.getElementById('s-streak').textContent = state.streak.count || 0;
+
+  const btn = document.getElementById('startBtn');
+  if(Q.length === 0){
+    btn.textContent = '今天没有待学的卡';
+    btn.disabled = true;
+    btn.style.opacity = .5;
+  }else{
+    btn.textContent = `开始（${Q.length} 张）`;
+    btn.disabled = false;
+    btn.style.opacity = 1;
+  }
+
+  renderFrontier();
+  renderCardList();
+}
+
+function renderFrontier(){
+  const box = document.getElementById('frontier');
+  const items = (DATA.cards || []).filter(c => c.kind === 'frontier')
+    .sort((a,b) => (b.day||'').localeCompare(a.day||'') || (b.score||0)-(a.score||0));
+  if(!items.length){
+    box.innerHTML = '<div class="empty">今天还没有推送内容</div>';
+    return;
+  }
+  box.innerHTML = items.map(c => `
+    <div class="card">
+      <div class="tag">前沿 · ${c.track || 'general'}
+        <span class="score">${(c.score||0).toFixed(2)}</span></div>
+      <h3>${esc(c.title)}</h3>
+      ${c.oneline ? `<p>${esc(c.oneline)}</p>` : ''}
+      ${c.why ? `<div class="why">${esc(c.why)}</div>` : ''}
+      <div class="links">
+        ${Object.entries(c.links||{}).map(([k,v]) =>
+          `<a href="${esc(v)}" target="_blank" rel="noopener">${label(k)}</a>`).join('')}
+        ${c.links && c.links.arxiv ? '' : `<a href="#" onclick="return false">—</a>`}
+      </div>
+    </div>`).join('');
+}
+
+function renderCardList(){
+  const box = document.getElementById('cards');
+  const all = (DATA.cards || []).filter(c => c.kind === 'concept' || c.kind === 'quiz');
+  if(!all.length){
+    box.innerHTML = `<div class="empty">
+      概念卡和题卡还没生成。<br>
+      这部分需要接上 LLM（第 ⑤ 步）。<br><br>
+      现在页面已经能跑，先看看上面的前沿卡。
+    </div>`;
+    return;
+  }
+  const t = today();
+  box.innerHTML = all.map(c => {
+    const r = state.cards[c.id];
+    const st = !r ? '未学' : (r.due <= t ? '待复习' : `${r.due.slice(5)} 复习`);
+    return `<div class="card"><div class="tag">${c.kind === 'concept' ? '概念' : '题'} ·
+      ${c.day || ''} · ${st}</div><h3>${esc(c.title || c.question || '')}</h3></div>`;
+  }).join('');
+}
+
+const labelMap = { arxiv:'arXiv', pdf:'PDF', code:'代码', project:'主页', origin:'原文' };
+const label = k => labelMap[k] || k;
+
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ---------------- 答题模式 ---------------- */
+function openFocus(){
+  if(!Q.length) return;
+  QI = 0;
+  document.getElementById('focus').classList.add('on');
+  showCard();
+}
+
+function showCard(){
+  answered = false;
+  document.getElementById('fbottom').classList.remove('on');
+  const c = Q[QI];
+  const box = document.getElementById('fcard');
+  document.getElementById('prog').textContent = `${QI+1} / ${Q.length}`;
+
+  if(c.kind === 'concept'){
+    const cps = (c.checkpoints||[]).map(x=>'· '+esc(x)).join('<br>');
+    const rds = (c.reading||[]).map(r=>{
+      const t = esc((r&&r.title)||r||'');
+      return (r && r.url) ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${t}</a>` : t;
+    }).filter(Boolean).join('<br>');
+    box.innerHTML = `
+      <div class="tag" style="color:var(--accent);font-size:11px;letter-spacing:.5px">
+        概念 · ${esc(c.track||'')}</div>
+      <h2 class="qtitle">${esc(c.title)}</h2>
+      <div class="body">${esc(c.body||'')}</div>
+      ${c.analogy ? `<div class="fnote"><b>打个比方</b>${esc(c.analogy)}</div>` : ''}
+      ${c.misconception ? `<div class="fnote"><b>常见误解</b>${esc(c.misconception)}</div>` : ''}
+      ${cps ? `<div class="fnote"><b>学完你应该能做到</b>${cps}</div>` : ''}
+      ${rds ? `<div class="fnote"><b>原始材料</b>${rds}</div>` : ''}`;
+    document.getElementById('fbottom').classList.add('on');
+  }else{
+    box.innerHTML = `
+      <div class="tag" style="color:var(--accent);font-size:11px;letter-spacing:.5px">
+        自测 · ${esc(c.day||'')}</div>
+      <h2 class="qtitle">${esc(c.question)}</h2>
+      <div id="opts">${(c.options||[]).map((o,i) =>
+        `<button class="opt" data-i="${i}">${c.mode==='selfcheck'?'':`<b class="let">${LET[i]||''}</b>`}${esc(o)}</button>`).join('')}</div>
+      <div id="explain"></div>`;
+    box.querySelectorAll('.opt').forEach(b => b.addEventListener('click', () => pick(b, c)));
+  }
+}
+
+function pick(btn, c){
+  if(answered) return;
+  answered = true;
+  const i = Number(btn.dataset.i);
+  const correct = Number(c.answer);
+  const selfcheck = c.mode === 'selfcheck';
+  document.querySelectorAll('.opt').forEach(o => {
+    const oi = Number(o.dataset.i);
+    if(selfcheck){
+      // 自检卡不判对错：选哪个都合理，只做视觉反馈
+      if(oi === i) o.classList.add('right');
+    }else{
+      if(oi === correct) o.classList.add('right');
+      else if(oi === i) o.classList.add('wrong');
+    }
+    o.disabled = true;
+  });
+  const head = selfcheck ? '' : (i === correct ? '✅ 对了。' : '❌ 不对。');
+  document.getElementById('explain').innerHTML =
+    `<div class="explain">${head}${esc(c.explain || '')}</div>`;
+  document.getElementById('fbottom').classList.add('on');
+}
+
+function rate(level){
+  const c = Q[QI];
+  if(!c) return;
+  state.cards[c.id] = { level, last: today(), due: addDays(today(), INTERVAL[level]) };
+  const t = today();
+  if(state.streak.last !== t){
+    state.streak.count = (state.streak.last === addDays(t, -1)) ? (state.streak.count + 1) : 1;
+    state.streak.last = t;
+  }
+  saveState();
+  QI++;
+  if(QI >= Q.length){ finish(); } else { showCard(); }
+}
+
+function finish(){
+  const box = document.getElementById('fcard');
+  box.innerHTML = `<div class="done"><div class="big">✓</div>
+    今天的 ${Q.length} 张卡完成了。<br>连续 ${state.streak.count} 天。</div>`;
+  document.getElementById('prog').textContent = '完成';
+  document.getElementById('fbottom').classList.remove('on');
+}
+
+document.getElementById('startBtn').addEventListener('click', openFocus);
+document.getElementById('closeBtn').addEventListener('click', () => {
+  document.getElementById('focus').classList.remove('on');
+  render();
+});
+document.getElementById('nextBtn').addEventListener('click', () => {
+  if(QI + 1 < Q.length){ QI++; showCard(); } else { finish(); }
+});
+document.querySelectorAll('.rate').forEach(b =>
+  b.addEventListener('click', () => rate(Number(b.dataset.level))));
+
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+# 归档一有变化就把网页同步过去。
+#
+# 为什么需要它：
+#   本地跑一次 run.py 会立刻把卡片推到手机，但网页只有云端部署才会更新。
+#   于是手机收到了、点进去还是旧页面 —— 这是错位，属于 bug。
+#   有了这个工作流，本地提交归档后一两分钟内网页就跟上，不需要任何人点按钮。
+#
+# 不会和每日任务打架：
+#   · 每日任务的提交信息带 [skip ci]，GitHub 不会因为那次 push 触发本工作流；
+#   · 本工作流只做「归档 → 网页」，不抓取、不调 LLM、不推送，零成本。
+name: 网页同步
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data/archive/**"
+      - "web/**"
+      - "engine/**"
+      - "tools/build_site.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.first_try.outputs.page_url || steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: pip install --quiet -r requirements.txt
+
+      - name: 从归档重建站点
+        run: python tools/build_site.py
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: 部署到 Pages
+        id: first_try
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: 等 15 秒（Pages 部署有全局锁，立刻重试大概率还是冲突）
+        if: steps.first_try.outcome == 'failure'
+        run: sleep 15
+
+      - name: 部署到 Pages（重试）
+        id: deployment
+        if: steps.first_try.outcome == 'failure'
+        uses: actions/deploy-pages@v4

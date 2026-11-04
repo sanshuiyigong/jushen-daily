@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>具身日报 · 控制台</title>
+<link rel="icon" href="favicon.ico">
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#14181f; --panel2:#1b2029; --line:#262c37;
+    --fg:#e6e9ef; --dim:#8892a3; --accent:#7dd3fc; --ok:#4ade80;
+    /* 五档重要性 */
+    --t-red:#e11d48; --t-red-bg:rgba(225,29,72,.14);
+    --t-orange:#f97316; --t-orange-bg:rgba(249,115,22,.12);
+    --t-amber:#eab308; --t-amber-bg:rgba(234,179,8,.10);
+    --t-blue:#3b82f6; --t-blue-bg:rgba(59,130,246,.10);
+    --t-gray:#4b5563; --t-gray-bg:rgba(75,85,99,.12);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+    font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  body{padding:0 0 100px}
+
+  header{position:sticky;top:0;z-index:10;background:rgba(11,14,19,.95);
+    backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:13px 24px}
+  .hrow{display:flex;align-items:center;gap:16px;flex-wrap:wrap;max-width:1280px;margin:0 auto}
+  h1{margin:0;font-size:15px;font-weight:600;letter-spacing:.3px}
+  .pill{font-size:12px;color:var(--dim);background:var(--panel2);
+    border:1px solid var(--line);border-radius:20px;padding:3px 11px}
+  .pill b{color:var(--fg);font-weight:600}
+  .pill.on b{color:var(--ok)}
+  .pill.off b{color:var(--t-red)}
+  a.pill{text-decoration:none;color:var(--accent);border-color:rgba(125,211,252,.35);
+    background:rgba(125,211,252,.08)}
+  a.pill:hover{border-color:var(--accent);background:rgba(125,211,252,.16)}
+
+  main{max-width:1280px;margin:0 auto;padding:22px 24px}
+
+  .bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+  button{font-family:inherit;font-size:13.5px;cursor:pointer;border-radius:10px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--fg);padding:9px 15px;transition:.14s}
+  button:hover{border-color:#3d4757}
+  button.primary{background:var(--accent);color:#08131a;border-color:var(--accent);font-weight:600}
+  button.good{background:#166534;border-color:#166534;color:#dcfce7;font-weight:600}
+  button.ghost{background:transparent}
+  button:disabled{opacity:.45;cursor:not-allowed}
+
+  h2{font-size:12px;letter-spacing:.7px;text-transform:uppercase;color:var(--dim);
+    margin:30px 0 12px;font-weight:600;display:flex;align-items:center;gap:10px}
+  h2 .cnt{color:var(--dim);font-weight:400;text-transform:none;letter-spacing:0;font-size:12px}
+
+  /* ---------- 图例 ---------- */
+  .legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .lg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 11px}
+  .lg i{width:9px;height:9px;border-radius:3px;display:block}
+
+  /* ---------- 今天的推送 ---------- */
+  .today{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
+  @media(max-width:900px){.today{grid-template-columns:1fr}}
+  .tk{background:var(--panel);border:1px solid var(--line);border-left-width:4px;
+    border-radius:12px;padding:15px 17px}
+  .tk.red{border-left-color:var(--t-red)}
+  .tk.blue{border-left-color:var(--t-blue)}
+  .tk .lab{font-size:11px;color:var(--dim);letter-spacing:.6px;margin-bottom:7px;text-transform:uppercase}
+  .tk .ttl{font-size:15px;font-weight:600;line-height:1.45;margin-bottom:6px}
+  .tk .sub{font-size:12.5px;color:var(--dim)}
+
+  /* ---------- 色块墙 ---------- */
+  .wall{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:11px}
+  .box{position:relative;border-radius:12px;padding:13px 15px 12px;overflow:hidden;
+    border:1px solid var(--line);background:var(--panel);transition:.14s;cursor:default}
+  .box:hover{transform:translateY(-2px);border-color:#3d4757}
+  .box::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
+  .box .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:7px}
+  .box .sc{font-size:19px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .box .rk{font-size:11px;color:var(--dim);margin-right:6px;font-weight:400}
+  .box .tr{font-size:11px;padding:2px 7px;border-radius:5px;background:var(--panel2);color:var(--dim)}
+  .box .ttl{font-size:14px;line-height:1.5;margin-bottom:6px;font-weight:600;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .box .en{font-size:11px;line-height:1.45;color:#5f6a7d;margin-bottom:8px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .box .meta{font-size:11.5px;color:var(--dim);display:flex;justify-content:space-between;gap:8px}
+  .box .kw{color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .box .pick{position:absolute;right:10px;top:10px;font-size:10.5px;font-weight:700;
+    color:#08131a;background:var(--accent);padding:2px 8px;border-radius:20px;letter-spacing:.4px}
+
+  .box.t1{background:var(--t-red-bg);border-color:rgba(225,29,72,.35)}
+  .box.t1::before{background:var(--t-red)} .box.t1 .sc{color:var(--t-red)}
+  .box.t2{background:var(--t-orange-bg);border-color:rgba(249,115,22,.3)}
+  .box.t2::before{background:var(--t-orange)} .box.t2 .sc{color:var(--t-orange)}
+  .box.t3{background:var(--t-amber-bg);border-color:rgba(234,179,8,.28)}
+  .box.t3::before{background:var(--t-amber)} .box.t3 .sc{color:var(--t-amber)}
+  .box.t4{background:var(--t-blue-bg);border-color:rgba(59,130,246,.25)}
+  .box.t4::before{background:var(--t-blue)} .box.t4 .sc{color:var(--t-blue)}
+  .box.t5{background:var(--t-gray-bg)}
+  .box.t5::before{background:var(--t-gray)} .box.t5 .sc{color:var(--dim)}
+
+  /* ---------- 折叠区 ---------- */
+  details{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-top:12px}
+  summary{padding:13px 17px;cursor:pointer;font-size:13.5px;color:var(--dim);
+    list-style:none;display:flex;align-items:center;gap:9px}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:'▸';color:var(--dim);transition:.15s}
+  details[open] summary::before{transform:rotate(90deg)}
+  pre{margin:0;padding:0 17px 16px;overflow:auto;
+    font:12.5px/1.7 "Cascadia Code",Consolas,monospace;color:#c3cad6;white-space:pre}
+
+  .empty{background:var(--panel);border:1px dashed var(--line);border-radius:12px;
+    padding:26px;text-align:center;color:var(--dim);font-size:13px}
+
+  /* ---------- 补丁 ---------- */
+  .patch{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;margin-bottom:12px}
+  .patch.bad{border-color:rgba(225,29,72,.5)}
+  .phead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+  .pfile{font:12px/1 ui-monospace,monospace;color:var(--accent);
+    background:var(--panel2);padding:4px 9px;border-radius:6px}
+  .pwhy{color:var(--dim);font-size:12.5px}
+  .diff{font:12px/1.6 ui-monospace,monospace;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+  .diff div{padding:5px 11px;white-space:pre-wrap;word-break:break-all}
+  .diff .del{background:rgba(225,29,72,.1);color:#fda4af}
+  .diff .add{background:rgba(74,222,128,.1);color:#86efac}
+  .perr{color:#fda4af;font-size:12.5px;margin-top:8px}
+  .pacts{display:flex;gap:8px;margin-top:11px}
+  .pacts button{padding:7px 14px;font-size:13px}
+
+  /* ---------- 聊天 ---------- */
+  #fab{position:fixed;right:26px;bottom:26px;width:54px;height:54px;border-radius:50%;
+    background:var(--accent);color:#08131a;border:none;font-size:22px;cursor:pointer;
+    box-shadow:0 6px 22px rgba(0,0,0,.5);z-index:30}
+  #drawer{position:fixed;top:0;right:0;bottom:0;width:min(470px,100%);background:var(--panel);
+    border-left:1px solid var(--line);display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform .22s ease;z-index:40}
+  #drawer.on{transform:translateX(0)}
+  .dhead{display:flex;justify-content:space-between;align-items:center;
+    padding:15px 18px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .dhead button{background:none;border:none;color:var(--dim);font-size:18px;padding:4px 8px}
+  #log{flex:1 1 auto;overflow-y:auto;padding:16px}
+  .msg{margin-bottom:14px;font-size:13.5px;line-height:1.65}
+  .msg .who{font-size:11px;color:var(--dim);margin-bottom:4px}
+  .msg.user .bubble{background:var(--accent);color:#08131a;border-radius:12px 12px 3px 12px;
+    padding:9px 13px;display:inline-block;max-width:100%}
+  .msg.ai .bubble{background:var(--panel2);border:1px solid var(--line);
+    border-radius:12px 12px 12px 3px;padding:10px 13px;white-space:pre-wrap}
+  .hint{color:var(--dim);font-size:12.5px;line-height:1.9}
+  .hint code{background:var(--panel2);padding:1px 6px;border-radius:4px;font-size:12px}
+  .dinput{flex:0 0 auto;border-top:1px solid var(--line);padding:12px;display:flex;gap:8px}
+  .dinput textarea{flex:1;resize:none;height:58px;background:var(--panel2);color:var(--fg);
+    border:1px solid var(--line);border-radius:10px;padding:10px;font:13.5px/1.5 inherit}
+  .dinput textarea:focus{outline:none;border-color:var(--accent)}
+
+  #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
+    background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:11px 20px;font-size:13.5px;opacity:0;transition:.2s;z-index:60;pointer-events:none}
+  #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.bad{border-color:rgba(225,29,72,.6);color:#fda4af}
+  .spin{display:inline-block;width:11px;height:11px;border:2px solid var(--dim);
+    border-top-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hrow">
+    <h1>具身日报</h1>
+    <span class="pill" id="p-db">库 –</span>
+    <span class="pill" id="p-day">最近 –</span>
+    <span class="pill" id="p-git">git –</span>
+    <span class="pill" id="p-llm">LLM –</span>
+    <a class="pill" id="p-lan" href="#" target="_blank" style="display:none"
+       title="手机连同一个 WiFi，浏览器打开这个地址">手机访问 –</a>
+    <span style="flex:1"></span>
+    <a class="pill" href="archive.html" title="按日期或关键词查历史卡片">📚 存档</a>
+    <button id="btnReload">刷新</button>
+  </div>
+</header>
+
+<main>
+  <h2>今天的推送 <span class="cnt" id="todaySub"></span></h2>
+  <div id="today"><div class="empty">加载中…</div></div>
+
+  <h2>推送倾向 · 候选池 <span class="cnt" id="poolSub"></span></h2>
+  <div class="legend">
+    <span class="lg"><i style="background:var(--t-red)"></i>≥ 8.0 必推</span>
+    <span class="lg"><i style="background:var(--t-orange)"></i>7–8 强</span>
+    <span class="lg"><i style="background:var(--t-amber)"></i>6–7 中</span>
+    <span class="lg"><i style="background:var(--t-blue)"></i>5–6 弱</span>
+    <span class="lg"><i style="background:var(--t-gray)"></i>&lt; 5 不推</span>
+  </div>
+  <div id="wall" class="wall"><div class="empty">加载中…</div></div>
+
+  <details id="dryBox">
+    <summary>试跑对比（用历史数据重算，看改配置的效果）</summary>
+    <pre id="dryText">点上面的「刷新」后再展开</pre>
+  </details>
+
+  <h2 id="patchH" style="display:none">待确认的改动</h2>
+  <div id="patches"></div>
+</main>
+
+<button id="fab" title="聊天调参">⚙</button>
+
+<div id="drawer">
+  <div class="dhead"><b>调参助手</b><button id="closeDrawer">✕</button></div>
+  <div id="log">
+    <div class="hint">
+      用大白话说你想怎么改：<br>
+      · <code>SLAM 推太多了，少推点</code><br>
+      · <code>前沿给我 2 条</code><br>
+      · <code>概念卡别那么学术</code><br><br>
+      AI 只会<b>提议</b>，你点「应用」才写文件，并自动 git commit。
+    </div>
+  </div>
+  <div class="dinput">
+    <textarea id="input" placeholder="想怎么改？（Ctrl+Enter 发送）"></textarea>
+    <button class="primary" id="send" style="padding:0 18px">发送</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let HISTORY = [];
+let PICKED_KEY = '';
+
+const TRACK = {perception:'感知', control:'控制', general:'通用'};
+
+function toast(msg, bad=false){
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'on' + (bad ? ' bad' : '');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => { t.className = ''; }, 3200);
+}
+
+async function api(path, payload){
+  const res = await fetch(path, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload || {})
+  });
+  return await res.json();
+}
+
+function tier(score){
+  if (score >= 8) return 1;
+  if (score >= 7) return 2;
+  if (score >= 6) return 3;
+  if (score >= 5) return 4;
+  return 5;
+}
+
+function esc(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ---------------- 候选池色块墙 ---------------- */
+async function loadPool(){
+  const wall = $('wall');
+  try{
+    const r = await api('/api/pool', {top: 40});
+    if(!r.ok){ wall.innerHTML = `<div class="empty">${esc(r.error)}</div>`; return; }
+    PICKED_KEY = r.picked_key || '';
+    $('poolSub').textContent = `${r.total} 条库里数据 · 手机阈值 ${r.thresholds.mobile} · 电脑阈值 ${r.thresholds.pc}`;
+    wall.innerHTML = r.items.map(it => {
+      const t = tier(it.score);
+      const isPick = it.key === PICKED_KEY;
+      return `<div class="box t${t}">
+        ${isPick ? '<span class="pick">今日推送</span>' : ''}
+        <div class="top">
+          <span class="sc"><span class="rk">#${it.rank}</span>${it.score.toFixed(2)}</span>
+          <span class="tr">${esc(TRACK[it.track] || it.track)}</span>
+        </div>
+        <div class="ttl">${esc(it.title_zh || it.title)}</div>
+        ${it.title_zh ? `<div class="en" title="${esc(it.title)}">${esc(it.title)}</div>` : ''}
+        <div class="meta">
+          <span class="kw">${esc(it.source_label || it.source)}</span>
+        </div>
+      </div>`;
+    }).join('');
+    renderToday(r);
+  }catch(e){
+    wall.innerHTML = `<div class="empty">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+/* ---------------- 今天的推送 ---------------- */
+function renderToday(poolRes){
+  const box = $('today');
+  const picked = (poolRes.items || []).find(x => x.key === PICKED_KEY);
+  if(!picked){
+    box.innerHTML = '<div class="empty">今天没有达到阈值的条目前沿——只会推概念和题</div>';
+    return;
+  }
+  box.innerHTML = `
+    <div class="tk red">
+      <div class="lab">前沿 · ${esc(TRACK[picked.track] || picked.track)} · ${picked.score.toFixed(2)}</div>
+      <div class="ttl">${esc(picked.title_zh || picked.title)}</div>
+      ${picked.title_zh ? `<div class="sub" style="color:#5f6a7d;font-size:11.5px">${esc(picked.title)}</div>` : ''}
+      <div class="sub" style="margin-top:6px">${esc(picked.source_label || picked.source)}${picked.matched && picked.matched.length ? ' · ' + esc(picked.matched.join(' · ')) : ''}</div>
+    </div>
+    <div class="tk blue">
+      <div class="lab">概念卡</div>
+      <div class="ttl" id="tc-title">—</div>
+      <div class="sub" id="tc-sub">来自课程骨架</div>
+    </div>
+    <div class="tk blue">
+      <div class="lab">自测题</div>
+      <div class="ttl" id="tq-count">—</div>
+      <div class="sub">答完自评，按 1/3/7 天复习</div>
+    </div>`;
+  loadTodayCards();
+}
+
+async function loadTodayCards(){
+  try{
+    const s = await api('/api/status');
+    // 状态接口里没有课程信息，这里直接读今天的卡片包
+    const r = await fetch('../output/recent7.json', {cache:'no-store'});
+    if(!r.ok) return;
+    const d = await r.json();
+    const cards = d.cards || [];
+    const concept = cards.find(c => c.kind === 'concept');
+    const quizzes = cards.filter(c => c.kind === 'quiz');
+    if(concept){
+      const el = $('tc-title');
+      if(el) el.textContent = concept.title || '（未生成）';
+    } else {
+      const el = $('tc-title');
+      if(el) el.textContent = '今天还没生成';
+    }
+    const q = $('tq-count');
+    if(q) q.textContent = quizzes.length ? `${quizzes.length} 道` : '今天还没生成';
+  }catch(e){ /* 静态模式取不到就算了 */ }
+}
+
+/* ---------------- 状态 ---------------- */
+async function loadStatus(){
+  try{
+    const s = await api('/api/status');
+    $('p-db').innerHTML = `库 <b>${s.db_total}</b>`;
+    $('p-day').innerHTML = `最近 <b>${String(s.latest_day_files).replace('day-','').replace('.json','')}</b>`;
+    $('p-git').innerHTML = `git <b>${s.git_branch || '?'}</b>${s.git_dirty ? ' *' : ''}`;
+    $('p-git').title = s.git_last || '';
+    $('p-llm').className = 'pill ' + (s.llm_on ? 'on' : 'off');
+    $('p-llm').innerHTML = `LLM <b>${s.llm_on ? '开' : '关'}</b>`;
+    if(s.lan_url){
+      const a = $('p-lan');
+      a.style.display = '';
+      a.textContent = '手机访问 ' + s.lan_ip + ':' + s.port;
+      a.href = s.lan_url;
+    }
+  }catch(e){ /* 忽略 */ }
+}
+
+/* ---------------- 试跑 ---------------- */
+async function loadDryrun(){
+  const pre = $('dryText');
+  pre.textContent = '重算中…';
+  try{
+    const r = await api('/api/dryrun', {});
+    pre.textContent = r.ok ? r.text : (r.error || '失败');
+  }catch(e){ pre.textContent = '失败：' + e.message; }
+}
+
+/* ---------------- 补丁 ---------------- */
+function renderPatches(patches){
+  const box = $('patches');
+  box.innerHTML = '';
+  $('patchH').style.display = patches.length ? 'block' : 'none';
+  patches.forEach((p, i) => {
+    const d = document.createElement('div');
+    d.className = 'patch' + (p.applicable ? '' : ' bad');
+    d.innerHTML = `
+      <div class="phead">
+        <span class="pfile">${esc(p.file)}</span>
+        <span class="pwhy">${esc(p.reason || '')}</span>
+      </div>
+      <div class="diff">
+        ${p.old.split('\n').map(l => `<div class="del">- ${esc(l)}</div>`).join('')}
+        ${p.new.split('\n').map(l => `<div class="add">+ ${esc(l)}</div>`).join('')}
+      </div>
+      ${p.applicable ? '' : `<div class="perr">✘ 不能应用：${esc(p.error)}</div>`}
+      <div class="pacts">
+        ${p.applicable ? `<button class="good" data-i="${i}">应用</button>` : ''}
+        <button class="ghost" data-skip="${i}">跳过</button>
+      </div>`;
+    box.appendChild(d);
+  });
+  box.querySelectorAll('button[data-i]').forEach(b =>
+    b.addEventListener('click', () => applyOne(patches[Number(b.dataset.i)], b)));
+  box.querySelectorAll('button[data-skip]').forEach(b =>
+    b.addEventListener('click', () => { b.closest('.patch').style.opacity = '.4'; b.disabled = true; }));
+}
+
+async function applyOne(p, btn){
+  btn.disabled = true; btn.textContent = '应用中…';
+  try{
+    const r = await api('/api/apply', {file:p.file, old:p.old, new:p.new, reason:p.reason});
+    if(r.ok){
+      btn.textContent = '已应用 ✓'; btn.classList.remove('good');
+      toast('已写入 ' + p.file + (r.committed ? '，并已 git commit' : ''));
+      loadStatus(); loadPool(); loadDryrun();
+    }else{ btn.textContent = '失败'; toast('应用失败：' + r.error, true); }
+  }catch(e){ toast('出错：' + e.message, true); }
+}
+
+/* ---------------- 聊天 ---------------- */
+function addMsg(who, text){
+  const box = $('log');
+  const d = document.createElement('div');
+  d.className = 'msg ' + who;
+  d.innerHTML = `<div class="who">${who === 'user' ? '你' : 'AI'}</div>
+                 <div class="bubble">${esc(text)}</div>`;
+  box.appendChild(d); box.scrollTop = box.scrollHeight;
+  return d;
+}
+
+async function send(){
+  const input = $('input');
+  const text = input.value.trim();
+  if(!text) return;
+  input.value = '';
+  addMsg('user', text);
+  HISTORY.push({role:'user', content:text});
+  const thinking = addMsg('ai', '思考中…');
+  $('send').disabled = true;
+  try{
+    const r = await api('/api/chat', {message:text, history:HISTORY});
+    thinking.remove();
+    if(!r.ok){ addMsg('ai', '出错了：' + r.error); }
+    else{
+      addMsg('ai', r.reply || '（没有回复）');
+      HISTORY.push({role:'assistant', content:r.reply || ''});
+      if(r.patches && r.patches.length) renderPatches(r.patches);
+    }
+  }catch(e){ thinking.remove(); addMsg('ai', '请求失败：' + e.message); }
+  finally{ $('send').disabled = false; }
+}
+
+/* ---------------- 事件 ---------------- */
+$('btnReload').addEventListener('click', () => { loadStatus(); loadPool(); loadDryrun(); });
+$('fab').addEventListener('click', () => $('drawer').classList.add('on'));
+$('closeDrawer').addEventListener('click', () => $('drawer').classList.remove('on'));
+$('send').addEventListener('click', send);
+$('input').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)) send();
+});
+$('dryBox').addEventListener('toggle', () => { if($('dryBox').open) loadDryrun(); });
+
+loadStatus();
+loadPool();
+</script>
+</body>
+</html>
