@@ -1,7 +1,10 @@
 {
-  "updated_at": "2026-11-02T22:45:35",
-  "done": {},
+  "updated_at": "2026-11-05T07:31:43+08:00",
+  "done": {
+    "p-camera-model": "2026-11-05"
+  },
   "started": {
-    "p-camera-model": "2026-11-02"
+    "p-camera-model": "2026-11-02",
+    "c-basics": "2026-11-05"
   }
 }
