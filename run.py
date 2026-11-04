@@ -19,6 +19,7 @@ from datetime import datetime
 
 from engine.archive import append_day
 from engine.cardset import build_day, write_day, write_recent
+from engine.clock import today as today_bj
 from engine.config import load_config, paths
 from engine.curriculum import Curriculum
 from engine.fetch import fetch_all
@@ -51,7 +52,8 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config()
     p = paths(cfg)
     store = SeenStore(p["data"] / "seen.db")
-    day = datetime.now().strftime("%Y-%m-%d")
+    # 必须用北京时间：云端是 UTC，早 7:30 的定时在 UTC 还是前一天
+    day = today_bj()
 
     if args.if_missing:
         # 两个判据：

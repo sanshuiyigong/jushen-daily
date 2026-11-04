@@ -18,6 +18,7 @@ from typing import Any
 
 from .card import concept_card, frontier_card, quiz_cards
 from .curriculum import Curriculum
+from .clock import stamp as stamp_bj
 from .llm import LLMClient
 from .models import Item
 from .rerank import pick_best
@@ -102,7 +103,7 @@ def build_day(
 
     return {
         "day": day,
-        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "generated_at": stamp_bj(),
         "llm": bool(llm and llm.available),
         "node": node_info,
         # 今天选中的前沿是哪一条（用于推送成功后标记 pushed，避免明天重复推）
@@ -137,7 +138,7 @@ def write_recent(output_dir: Path, keep_days: int = 7) -> Path:
         cards.extend(day_cards)
 
     payload = {
-        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "generated_at": stamp_bj(),
         "keep_days": keep_days,
         "days": days,
         "cards": cards,

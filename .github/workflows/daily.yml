@@ -80,5 +80,18 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
+      # Pages 部署偶尔会瞬时报错（2026-11-04 早上就这样挂过一次，
+      # 而同一份产物 3 小时后再部署就成功了）。重试一次能把这类抖动吃掉。
+      - name: 部署到 Pages
+        id: first_try
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: 等 15 秒（Pages 部署有全局锁，立刻重试大概率还是冲突）
+        if: steps.first_try.outcome == 'failure'
+        run: sleep 15
+
+      - name: 部署到 Pages（重试）
+        id: deployment
+        if: steps.first_try.outcome == 'failure'
         uses: actions/deploy-pages@v4

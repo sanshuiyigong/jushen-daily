@@ -17,6 +17,9 @@ from typing import Any
 
 import yaml
 
+from .clock import stamp as stamp_bj
+from .clock import today as today_bj
+
 TRACK_FILES = ("perception", "control")
 
 
@@ -73,7 +76,7 @@ class Curriculum:
     def save_progress(self) -> None:
         self.progress_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "updated_at": datetime.now().isoformat(timespec="seconds"),
+            "updated_at": stamp_bj(),
             "done": self._done,
             "started": self._started,
         }
@@ -148,7 +151,7 @@ class Curriculum:
     def mark_done(self, node_id: str, day: str | None = None) -> bool:
         if not node_id or node_id in self._done:
             return False
-        self._done[node_id] = day or datetime.now().strftime("%Y-%m-%d")
+        self._done[node_id] = day or today_bj()
         self.save_progress()
         return True
 
@@ -156,7 +159,7 @@ class Curriculum:
         """记录某个节点第一次开始学的日期（只记一次，不覆盖）。"""
         if not node_id or node_id in self._started:
             return
-        self._started[node_id] = day or datetime.now().strftime("%Y-%m-%d")
+        self._started[node_id] = day or today_bj()
         self.save_progress()
 
     def auto_advance(self, day: str | None = None) -> list[str]:
@@ -165,7 +168,7 @@ class Curriculum:
         这是 v1 的简化：手机端的答题数据还没回传，所以进度只能按时长推进。
         等手机端把自评结果写回来之后，这里应该改成「答对才推进」。
         """
-        today = day or datetime.now().strftime("%Y-%m-%d")
+        today = day or today_bj()
         advanced: list[str] = []
         for name in list(self.tracks):
             node = self.current(name)

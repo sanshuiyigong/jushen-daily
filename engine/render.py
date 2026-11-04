@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from .clock import today as today_bj
 from .models import Item
 
 TRACK_LABEL = {"perception": "感知", "control": "控制", "general": "通用"}
@@ -71,7 +72,7 @@ def render_queue(
     new_count: int | None = None,
     offline: bool = False,
 ) -> str:
-    day = day or datetime.now().strftime("%Y-%m-%d")
+    day = day or today_bj()
     top = [i for i in items if i.score >= threshold_mobile]
     mid = [i for i in items if threshold_pc <= i.score < threshold_mobile]
     below = [i for i in items if i.score < threshold_pc]

@@ -18,6 +18,8 @@ from typing import Any
 
 import requests
 
+from .clock import stamp as stamp_bj
+from .clock import today as today_bj
 from .net import detect_local_proxy, make_session
 
 LOG = logging.getLogger("push")
@@ -67,7 +69,7 @@ def already_pushed_today(data_dir: Path, day: str) -> bool:
 def mark_pushed(data_dir: Path, day: str) -> None:
     state = _load_state(data_dir)
     state["last_day"] = day
-    state["last_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    state["last_at"] = stamp_bj()
     _save_state(data_dir, state)
 
 
@@ -186,7 +188,7 @@ def _full_body(cards: list[dict[str, Any]]) -> str:
 
 def _compose(day_data: dict[str, Any], *, full: bool = True) -> tuple[str, str]:
     """把一天的卡片包压成一条手机上看得到的通知。"""
-    day = day_data.get("day") or datetime.now().strftime("%Y-%m-%d")
+    day = day_data.get("day") or today_bj()
     cards = day_data.get("cards") or []
     title = f"具身日报 · {day[5:]}"
 
@@ -228,7 +230,7 @@ def push_daily(
     """按配置把今天的卡片包推到手机。返回是否真的发了。"""
     push_cfg = cfg.get("push") or {}
     channel = str(push_cfg.get("channel") or "off").strip().lower()
-    day = str(day_data.get("day") or datetime.now().strftime("%Y-%m-%d"))
+    day = str(day_data.get("day") or today_bj())
 
     if channel in ("", "off", "none", "false"):
         LOG.info("推送未启用（push.channel = %s）", channel or "空")
@@ -293,7 +295,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s", stream=sys.stdout)
     cfg = load_config()
     p = paths(cfg)
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = today_bj()
 
     # 优先用今天的；今天还没生成就退回到最近一份，方便随时预览
     day_dir = p["output"] / "days"

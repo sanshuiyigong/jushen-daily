@@ -24,6 +24,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
 
+from .clock import stamp as stamp_bj
+from .clock import today as today_bj
+
 LOG = logging.getLogger("archive")
 
 DIR_NAME = "archive"
@@ -42,7 +45,7 @@ def archive_dir(data_dir: Path) -> Path:
 
 
 def month_file(data_dir: Path, day: str) -> Path:
-    month = (day or "")[:7] or datetime.now().strftime("%Y-%m")
+    month = (day or "")[:7] or today_bj()[:7]
     return archive_dir(data_dir) / f"{month}.jsonl"
 
 
@@ -64,7 +67,7 @@ def _iter_file(path: Path) -> Iterator[dict[str, Any]]:
 
 def append_day(data_dir: Path, day_data: dict[str, Any]) -> int:
     """把一天的卡片追加进归档。已存在的 (day, id) 不会重复写。返回新写入条数。"""
-    day = str(day_data.get("day") or datetime.now().strftime("%Y-%m-%d"))
+    day = str(day_data.get("day") or today_bj())
     cards = day_data.get("cards") or []
     if not cards:
         return 0
@@ -80,7 +83,7 @@ def append_day(data_dir: Path, day_data: dict[str, Any]) -> int:
         seen.add(cid)
         record = dict(card)
         record["day"] = day
-        record["archived_at"] = datetime.now().isoformat(timespec="seconds")
+        record["archived_at"] = stamp_bj()
         fresh.append(json.dumps(record, ensure_ascii=False))
 
     if not fresh:
