@@ -51,16 +51,23 @@ def build_day(
         if picked:
             track_name, node = picked
             track_label = (curriculum.tracks.get(track_name) or {}).get("name", track_name)
-            cards.append(concept_card(node, track_label, day, llm))
-            cards.extend(quiz_cards(node, day, quiz_limit, llm))
+            # 同一节点要学好几天，每天换一个角度（入门 → 深入 → 应用）
+            stage, total_days = curriculum.stage_of(node, day)
+            cards.append(concept_card(node, track_label, day, llm, stage=stage, total=total_days))
+            cards.extend(quiz_cards(node, day, quiz_limit, llm, stage=stage, total=total_days))
             node_info = {
                 "track": track_name,
                 "track_label": track_label,
                 "node_id": node.get("id"),
                 "title": node.get("title"),
                 "estimated_days": node.get("estimated_days"),
+                "stage": stage,
+                "stage_total": total_days,
             }
-            LOG.info("今日概念：%s · %s", track_label, node.get("title"))
+            LOG.info(
+                "今日概念：%s · %s（第 %d/%d 天）",
+                track_label, node.get("title"), stage, total_days,
+            )
 
     # ---- 前沿卡 ----
     track_hint = ""

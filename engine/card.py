@@ -32,6 +32,33 @@ SYS_VERIFY = (
     "如果一道题原本就是对的，就不要动它。宁可放过，不可改错。"
 )
 
+# 一个节点要学好几天时，每天换一个角度，避免连续几天推同一篇
+STAGE_LABEL = {1: "入门", 2: "深入", 3: "应用"}
+
+STAGE_FOCUS = {
+    1: (
+        "第一段讲它到底是什么（定义 + 关键式子）；"
+        "第二段讲它在真实机器人上会表现成什么现象；"
+        "第三段讲最容易踩的坑。"
+    ),
+    2: (
+        "第一段把核心公式一步步推出来，并解释每一步的物理含义；"
+        "第二段分别说清关键参数调大会怎样、调小会怎样；"
+        "第三段讲这个模型在什么条件下会失效。"
+    ),
+    3: (
+        "第一段讲它在真实机器人系统里具体用在哪个环节、上下游是谁；"
+        "第二段讲工程上出问题时的典型排查顺序（先看什么、再看什么）；"
+        "第三段讲最容易和它混淆的相邻概念，以及怎么一眼区分。"
+    ),
+}
+
+QUIZ_ANGLE = {
+    1: "考「它是什么、为什么需要它」这一层的基本判断和常见误解。",
+    2: "考「参数变了结果怎么变、公式里哪一步最容易算错」。不要考定义。",
+    3: "考「真实场景里该怎么选、出问题了先查哪一步」。要像工程诊断题，不要考定义。",
+}
+
 
 def _clip(text: Any, limit: int = 300) -> str:
     s = str(text or "").strip()
@@ -123,24 +150,43 @@ def concept_card(
     track_label: str,
     day: str,
     llm: LLMClient | None = None,
+    stage: int = 1,
+    total: int = 1,
 ) -> dict[str, Any]:
+    """生成概念卡。
+
+    stage/total：一个课程节点可能要学好几天。如果每天都给同一张入门卡，
+    手机上看起来就是三天复读同一篇。所以按天数切三档深度：
+        第 1 天 入门（是什么、为什么存在）
+        第 2 天 深入（公式怎么来、参数怎么影响）
+        第 3 天起 应用（真实系统怎么用、怎么排错）
+    """
     node_id = node["id"]
+    base_title = node.get("title", "")
+    stage_label = STAGE_LABEL.get(stage, "应用") if total > 1 else ""
+    display_title = f"{base_title} · {stage_label}" if stage_label else base_title
+
     card: dict[str, Any] = {
         "kind": "concept",
-        "id": f"c-{node_id}",
+        # id 必须带日期：手机端按 id 记复习排期，如果 id 跨天不变，
+        # 昨天评过级的卡片今天会被「还没到期」的规则挡掉，页面就一片空白。
+        "id": f"c-{day}-{node_id}",
         "day": day,
         "node_id": node_id,
         "track": track_label,
-        "title": node.get("title", ""),
+        "title": display_title,
         "body": "",
         "analogy": "",
         "misconception": "",
         "checkpoints": node.get("checkpoints") or [],
         "reading": node.get("reading") or [],
+        "stage": stage,
+        "stage_total": total,
         "mode": "template",
     }
 
     if llm and llm.available:
+        focus = STAGE_FOCUS.get(stage, STAGE_FOCUS[3]) if total > 1 else STAGE_FOCUS[1]
         user = f"""课程节点：{node.get('title')}
 所属轨道：{track_label}
 学习目标：{node.get('goal')}
@@ -150,8 +196,11 @@ def concept_card(
 检验点：
 {_checkpoint_lines(node)}
 
+这是这个节点的第 {stage} 天（共 {total} 天）。今天只讲这一个角度：
+{focus}
+
 请输出 JSON，三个字段：
-{{"body": "200-280 字，分 3 段，段与段之间用 \\n\\n 分隔。第一段讲它到底是什么（定义 + 关键式子）；第二段讲它在真实机器人上会表现成什么现象；第三段讲最容易踩的坑。",
+{{"body": "200-280 字，分 3 段，段与段之间用 \\n\\n 分隔。严格按上面「今天只讲这一个角度」的要求组织三段，不要重复讲定义。",
  "analogy": "一个生活化的类比，30 字以内",
  "misconception": "初学者最常见的误解，40 字以内"}}"""
         obj = llm.chat_json(SYS_TUTOR, user, temperature=0.5, max_tokens=900)
@@ -186,17 +235,23 @@ def quiz_cards(
     day: str,
     limit: int = 2,
     llm: LLMClient | None = None,
+    stage: int = 1,
+    total: int = 1,
 ) -> list[dict[str, Any]]:
     node_id = node["id"]
     cards: list[dict[str, Any]] = []
 
     if llm and llm.available:
+        angle = QUIZ_ANGLE.get(stage, QUIZ_ANGLE[3]) if total > 1 else QUIZ_ANGLE[1]
         user = f"""基于下面这个概念，出 {limit} 道单选题。
 
 概念：{node.get('title')}
 目标：{node.get('goal')}
 检验点：
 {_checkpoint_lines(node)}
+
+今天是这个节点的第 {stage} 天（共 {total} 天），出题角度：
+{angle}
 
 要求：
 - 每题 4 个选项，只有 1 个正确
@@ -222,7 +277,8 @@ def quiz_cards(
             cards.append(
                 {
                     "kind": "quiz",
-                    "id": f"q-{node_id}-{idx + 1}",
+                    # 同样要带日期，理由见 concept_card
+                    "id": f"q-{day}-{node_id}-{idx + 1}",
                     "day": day,
                     "node_id": node_id,
                     "question": str(q.get("question")),
@@ -305,7 +361,7 @@ def frontier_card(
 
     return {
         "kind": "frontier",
-        "id": f"f-{item.key}",
+        "id": f"f-{day}-{item.key}",
         "day": day,
         "title": item.title,
         "oneline": oneline,

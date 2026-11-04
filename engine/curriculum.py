@@ -162,6 +162,22 @@ class Curriculum:
         self._started[node_id] = day or today_bj()
         self.save_progress()
 
+    def stage_of(self, node: dict[str, Any], day: str | None = None) -> tuple[int, int]:
+        """这个节点今天是第几天的学习（1-based），以及总共几天。
+
+        用来让「同一个节点连续几天」每天换个角度，而不是复读同一篇。
+        """
+        today = day or today_bj()
+        try:
+            total = max(1, int(node.get("estimated_days") or 1))
+        except (TypeError, ValueError):
+            total = 1
+        started = self._started.get(node.get("id"))
+        if not started:
+            return 1, total
+        idx = _days_between(started, today) + 1
+        return max(1, min(idx, total)), total
+
     def auto_advance(self, day: str | None = None) -> list[str]:
         """按 estimated_days 把「学够天数」的节点标记为完成。
 
