@@ -1,12 +1,14 @@
 {
-  "updated_at": "2026-11-07T07:31:46+08:00",
+  "updated_at": "2026-11-11T07:31:47+08:00",
   "done": {
     "p-camera-model": "2026-11-05",
-    "c-basics": "2026-11-07"
+    "c-basics": "2026-11-07",
+    "p-hand-eye": "2026-11-11"
   },
   "started": {
     "p-camera-model": "2026-11-02",
     "c-basics": "2026-11-05",
-    "p-hand-eye": "2026-11-07"
+    "p-hand-eye": "2026-11-07",
+    "c-servo-bus": "2026-11-11"
   }
 }
