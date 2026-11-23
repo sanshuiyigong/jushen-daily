@@ -1,11 +1,12 @@
 {
-  "updated_at": "2026-11-17T07:31:46+08:00",
+  "updated_at": "2026-11-24T07:32:02+08:00",
   "done": {
     "p-camera-model": "2026-11-05",
     "c-basics": "2026-11-07",
     "p-hand-eye": "2026-11-11",
     "c-servo-bus": "2026-11-14",
-    "p-depth-pointcloud": "2026-11-17"
+    "p-depth-pointcloud": "2026-11-17",
+    "c-power": "2026-11-24"
   },
   "started": {
     "p-camera-model": "2026-11-02",
@@ -13,6 +14,7 @@
     "p-hand-eye": "2026-11-07",
     "c-servo-bus": "2026-11-11",
     "p-depth-pointcloud": "2026-11-14",
-    "c-power": "2026-11-17"
+    "c-power": "2026-11-17",
+    "p-pose-estimation": "2026-11-24"
   }
 }
